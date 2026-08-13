@@ -1,7 +1,7 @@
 /**
  * The model-facing `glob` tool: discover files whose paths match a glob
- * pattern, sorted by modification time. Execution spawns the packaged
- * ripgrep binary (`@vscode/ripgrep`) directly through the subprocess seam
+ * pattern, sorted by modification time. Execution spawns the resolved
+ * ripgrep executable directly through the subprocess seam
  * with a plain argv vector — this module owns the model-facing schema,
  * argument validation, argv construction, result parsing, inline sampling,
  * and formatting; process concerns (spawn execution, tree termination,
@@ -39,6 +39,8 @@ export const GLOB_VCS_EXCLUDES: readonly string[] = ['.git', '.svn', '.hg', '.bz
 
 /** Resolved glob-tool caps — plugin config after defaulting (see `Config` in index.ts). */
 export interface GlobToolCaps {
+  /** Deployment-supplied ripgrep executable, or `undefined` for npm package resolution. */
+  ripgrepPath?: string
   /** Whether over-cap pages are sampled across top-level entries instead of taking the modification-time head. */
   sampleOverCapGlobResults: boolean
   /** Max paths retained inline; later paths go to the formatted spill file. */
@@ -341,7 +343,16 @@ export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
     },
     async execute(args, exec) {
       const input = parseGlobArgs(args)
-      const run = await runRipgrep(ctx, exec, 'glob', buildGlobCommand(input), caps.rawOutputMaxBytes, caps.graceMs, caps.stderrMaxBytes)
+      const run = await runRipgrep(
+        ctx,
+        exec,
+        'glob',
+        buildGlobCommand(input),
+        caps.rawOutputMaxBytes,
+        caps.graceMs,
+        caps.stderrMaxBytes,
+        caps.ripgrepPath,
+      )
       const root = input.path === undefined ? '.' : toWorkdirRelative(input.path, run.workdir)
       if (run.noMatches) return { root, paths: [] }
 

@@ -1,0 +1,21 @@
+[package]
+name = "dsh-desktop"
+version = "0.1.0-rc.5"
+description = "Native shell for the DeepSeek Harness Web application"
+authors = ["DeepSeek"]
+license = "MIT"
+repository = "https://github.com/P-A-N-52/deepseek-harness-desktop"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "dsh_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+libc = "0.2"
+signal-hook = "0.3"
+tauri = { version = "2.11.3", features = [] }

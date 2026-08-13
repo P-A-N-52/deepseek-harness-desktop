@@ -1,15 +1,15 @@
 /**
  * Shared execution plumbing for the `glob` / `grep` search tools: the
  * package-owned `SEARCH_*` error vocabulary, one spawn helper that runs the
- * PACKAGED ripgrep binary (`@vscode/ripgrep`) with a plain argv vector and
+ * resolved ripgrep executable with a plain argv vector and
  * returns complete raw stdout, the best-effort formatted-result spill handoff,
  * and workdir-relative path display.
  *
  * Both tools execute as ordinary foreground spawns through `ctx.subprocess` —
  * never `ctx.shell`, never `ctx.shell.start()`, never a model-visible background
- * task. The ripgrep binary ships inside the npm package, so no system `rg`
- * install is required, and no shell layer exists between the argv vector and
- * ripgrep, so no shell quoting is involved. Raw `rg` stdout is an internal
+ * task. The executable comes from the npm platform package or an explicit
+ * deployment path, so no system `rg` lookup is required, and no shell layer
+ * exists between the argv vector and ripgrep, so no shell quoting is involved. Raw `rg` stdout is an internal
  * transport detail: the tools request a per-run stdout capture budget from the
  * subprocess seam, parse only complete in-memory stdout within
  * `rawOutputMaxBytes`, and never read spill files. The model-facing recovery
@@ -174,7 +174,7 @@ export function resolveRgPath(): Promise<string> {
 }
 
 /**
- * Run the packaged ripgrep binary with a plain argv vector and return its
+ * Run the resolved ripgrep binary with a plain argv vector and return its
  * complete raw stdout. The working directory is the calling agent's session
  * cwd (`exec.agent.session.header.cwd`) when available, else
  * `process.cwd()`. `exec.signal` is forwarded so the cooperative tool timeout
@@ -206,6 +206,7 @@ export function resolveRgPath(): Promise<string> {
  * @param rawOutputMaxBytes - cap on the complete raw stdout the tool will parse.
  * @param graceMs - the seam's terminate-escalation grace period.
  * @param stderrMaxBytes - cap on the retained stderr diagnostic tail.
+ * @param ripgrepPath - deployment-supplied executable, or `undefined` to lazily resolve the npm platform package.
  * @returns the complete stdout, the zero-result flag, and the resolved workdir.
  */
 export async function runRipgrep(
@@ -216,6 +217,7 @@ export async function runRipgrep(
   rawOutputMaxBytes: number,
   graceMs: number,
   stderrMaxBytes: number,
+  ripgrepPath?: string,
 ): Promise<RipgrepRun> {
   if (exec.signal.aborted) {
     throw new SearchError(`${toolName} was aborted before completion (tool timeout or caller cancellation)`, 'SEARCH_ABORTED')
@@ -225,7 +227,7 @@ export async function runRipgrep(
   let handle: SubprocessHandle
   try {
     handle = ctx.subprocess.spawn({
-      argv: [await resolveRgPath(), '--no-config', ...argv],
+      argv: [ripgrepPath ?? await resolveRgPath(), '--no-config', ...argv],
       cwd: workdir,
       stdio: {
         stdin: 'ignore',

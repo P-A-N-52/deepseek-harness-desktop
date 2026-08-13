@@ -38,6 +38,8 @@ The tree composes over an empty root:
 
 Bundles named in `dsh.profile.bundles` resolve from the dsh installation first (`@deepseek-ai/dsh-base`, `@deepseek-ai/dsh-web-app`, `@deepseek-ai/dsh-headless`), then from the profile's own `node_modules`, where pnpm installs out-of-tree plugins.
 
+The internal `lib/packaged-desktop-bin.js` entry is the sealed-runtime exception: it always starts the `web` profile on `127.0.0.1` with an ephemeral port, resolves every bare plugin from its executable closure, and does not create the profile module-fallback symlink. It is a Desktop sidecar entry, not another public CLI mode; user patches may configure bundled plugins but cannot extend that closure with newly installed packages. The native host starts it in a dedicated process group. If that direct parent disappears, the entry requests the ordinary profile teardown and force-terminates the dedicated group after teardown completes or reaches its bound.
+
 Use `--dump-default-config` and `--dump-config` to inspect the composed tree without booting it.
 
 The [CLI behavior reference](reference/README.md) owns exact layer precedence, flags, shutdown behavior, deployment defaults, and source execution.

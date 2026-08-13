@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -564,27 +564,49 @@ describe('boot', () => {
     const absolutePlugin = join(dir, 'absolute.mjs')
     const shadow = join(dir, 'node_modules', '@deepseek-ai', 'dsh-system-prompt')
     const harnessPlugin = join(harness, 'node_modules', '@deepseek-ai', 'dsh-system-prompt')
+    const harnessDynamicPlugin = join(harness, 'node_modules', '@deepseek-ai', 'dsh-dynamic-plugin')
     mkdirSync(shadow, { recursive: true })
     mkdirSync(harnessPlugin, { recursive: true })
+    mkdirSync(harnessDynamicPlugin, { recursive: true })
     writeFileSync(join(shadow, 'package.json'), JSON.stringify({
       name: '@deepseek-ai/dsh-system-prompt',
       type: 'module',
-      exports: './index.mjs',
+      exports: {
+        '.': './index.mjs',
+        './package.json': './package.json',
+      },
     }))
     writeFileSync(join(shadow, 'index.mjs'), [
       'export function apply(ctx) {',
       '  ctx.provide("shadowPluginLoaded", true)',
+      '  ctx.provide("resolvedPackageJson", ctx.appModuleResolver.resolve("@deepseek-ai/dsh-system-prompt/package.json"))',
       '}',
       '',
     ].join('\n'))
     writeFileSync(join(harnessPlugin, 'package.json'), JSON.stringify({
       name: '@deepseek-ai/dsh-system-prompt',
       type: 'module',
-      exports: './index.mjs',
+      exports: {
+        '.': './index.mjs',
+        './package.json': './package.json',
+      },
     }))
     writeFileSync(join(harnessPlugin, 'index.mjs'), [
-      'export function apply(ctx) {',
+      'export async function apply(ctx) {',
       '  ctx.provide("harnessPluginLoaded", true)',
+      '  ctx.provide("resolvedPackageJson", ctx.appModuleResolver.resolve("@deepseek-ai/dsh-system-prompt/package.json"))',
+      '  await ctx.loader.create({ name: "@deepseek-ai/dsh-dynamic-plugin" })',
+      '}',
+      '',
+    ].join('\n'))
+    writeFileSync(join(harnessDynamicPlugin, 'package.json'), JSON.stringify({
+      name: '@deepseek-ai/dsh-dynamic-plugin',
+      type: 'module',
+      exports: './index.mjs',
+    }))
+    writeFileSync(join(harnessDynamicPlugin, 'index.mjs'), [
+      'export function apply(ctx) {',
+      '  ctx.provide("harnessDynamicPluginLoaded", true)',
       '}',
       '',
     ].join('\n'))
@@ -610,6 +632,7 @@ describe('boot', () => {
       expect(configOwned.get('shadowPluginLoaded')).toBe(true)
       expect(configOwned.get('systemPrompt')).toBeUndefined()
       expect(configOwned.get('relativePluginLoaded')).toBe(true)
+      expect(configOwned.get('resolvedPackageJson')).toBe(realpathSync(join(shadow, 'package.json')))
     } finally {
       await configOwned.fiber.dispose()
     }
@@ -617,9 +640,11 @@ describe('boot', () => {
     const ctx = await boot(NAME, hostOwnedPath, undefined, undefined, harnessBaseUrl)
     try {
       expect(ctx.get('harnessPluginLoaded')).toBe(true)
+      expect(ctx.get('harnessDynamicPluginLoaded')).toBe(true)
       expect(ctx.get('shadowPluginLoaded')).toBeUndefined()
       expect(ctx.get('relativePluginLoaded')).toBe(true)
       expect(ctx.get('absolutePluginLoaded')).toBe(true)
+      expect(ctx.get('resolvedPackageJson')).toBe(realpathSync(join(harnessPlugin, 'package.json')))
     } finally {
       await ctx.fiber.dispose()
     }

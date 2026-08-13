@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-13-tauri-desktop-loopback-shell.md
+2026-08-13-tauri-desktop-loopback-shell.md: a173e83ae7852640ba02027fac6d1eb6f061cd0c
+2026-08-13-tauri-desktop-loopback-shell.zh.md: 8b774cd3daa85e87d9d6a7610d0ed2f3257e6096

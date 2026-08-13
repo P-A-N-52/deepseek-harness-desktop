@@ -24,6 +24,8 @@
 
 [`dsh-base`](../packages/bundle/base/README.md) 是每个 profile 的第一层：模型适配器、工具、持久化、沙箱与审批策略、设置、凭据、遥测。[`dsh-web-app`](../packages/bundle/web-app/README.md) 增加浏览器应用；[`dsh-headless`](../packages/bundle/headless/README.md) 增加一次性运行器，且完全不带服务器。
 
+[DeepSeek Harness Desktop](../apps/desktop/README.md) 是一个 Tauri 应用。它监管封闭的 `dsh` Web sidecar，在原生 WebView 中打开它报告的 `127.0.0.1` URL，不增加 IPC client，也不组装第二棵 Cordis 树；其授权范围、生命周期和能力限制由 [Desktop 回环说明](../.agents/notes/implemented/architecture/2026-08-13-tauri-desktop-loopback-shell.md)说明。
+
 各层按此顺序应用在空条目列表之上：先按 profile 列出的顺序应用每个组合包，然后是 profile 的 `cordis.patch.yml`，然后是 home 级的那份，最后是任意 `--patch` overlay。一条 patch 按 id 定位某个条目并替换其整个 config，或插入新条目。
 
 要查看你的机器实际启动的配置树：

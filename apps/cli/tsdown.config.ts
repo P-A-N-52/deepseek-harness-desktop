@@ -1,13 +1,13 @@
 import { defineConfig } from 'tsdown'
 
 /**
- * The dsh CLI ships one entry: the `bin` referenced by package.json `bin`.
- * The root tsdown builds only `lib/types/index.js`, so this override points at
- * `lib/types/bin.js` instead; its reachable mode modules bundle with it.
+ * The dsh app ships the public `bin` and a closed Desktop-runtime entry. The
+ * root tsdown builds only `lib/types/index.js`, so this override points at the
+ * two executable entries; each one's reachable mode modules bundle with it.
  * Declarations come from `tsc -b` (dts: false), matching every package.
  */
 export default defineConfig({
-  entry: ['lib/types/bin.js'],
+  entry: ['lib/types/bin.js', 'lib/types/packaged-desktop-bin.js'],
   outDir: 'lib',
   format: ['esm'],
   platform: 'node',

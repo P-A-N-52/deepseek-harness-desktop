@@ -2,6 +2,7 @@
 
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -11,10 +12,13 @@ import type { WebServer, WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import { ClientModuleRegistry } from '../src/index.ts'
 
 let root: string | undefined
+let profileRoot: string | undefined
 
 afterEach(() => {
   if (root !== undefined) rmSync(root, { recursive: true, force: true })
+  if (profileRoot !== undefined) rmSync(profileRoot, { recursive: true, force: true })
   root = undefined
+  profileRoot = undefined
 })
 
 /** Create a resolvable package whose client export points at the returned path. */
@@ -40,7 +44,12 @@ function writePackage(
 /** Construct the node-half service and capture its plugin-bundle route. */
 function constructWithRoute(packageNames: string[]): { service: ClientModuleRegistry; route: WebRoute } {
   const ctx = new Context()
-  ctx.baseUrl = pathToFileURL(root!).href + '/'
+  profileRoot ??= realpathSync(mkdtempSync(join(tmpdir(), 'dsh-client-modules-profile-')))
+  ctx.baseUrl = pathToFileURL(join(profileRoot, 'cordis.yml')).href
+  const appRequire = createRequire(pathToFileURL(join(root!, 'entry.mjs')).href)
+  ctx.provide('appModuleResolver', {
+    resolve: (specifier: string) => appRequire.resolve(specifier),
+  })
   ctx.provide('loader', {
     *entries() {
       for (const packageName of packageNames) {
@@ -69,6 +78,14 @@ function construct(packageNames: string[]): ClientModuleRegistry {
 }
 
 describe('client bundle activation', () => {
+  it('resolves package metadata from the app package tree outside the physical profile', () => {
+    const packageName = '@fixture/sealed-client'
+    const clientPath = writePackage(packageName)
+    mkdirSync(dirname(clientPath), { recursive: true })
+    writeFileSync(clientPath, 'module.exports = {}\n')
+    expect(construct([packageName]).graph().entries.map(entry => entry.id)).toEqual([packageName])
+  })
+
   it('allows sibling dsh roles', () => {
     const currentName = '@fixture/current-client-field'
     const clientPath = writePackage(currentName, {

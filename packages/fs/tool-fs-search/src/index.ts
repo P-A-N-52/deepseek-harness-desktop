@@ -1,8 +1,8 @@
 /**
  * The model-facing filesystem discovery tool suite (`glob`, `grep`) over the
- * packaged ripgrep binary (`@vscode/ripgrep`). This single plugin registers
- * both tools; the binary ships inside the npm dependency, so no system `rg`
- * install and no shell layer is involved.
+ * ripgrep executable. This single plugin registers both tools; ordinary npm
+ * deployments use `@vscode/ripgrep`, while sealed deployments can configure
+ * an owned native executable. No system `rg` lookup or shell layer is involved.
  *
  * ## Spawn-backed, not a `ctx.fs` provider method
  *
@@ -26,6 +26,9 @@
  * @module @deepseek-ai/dsh-tool-fs-search
  */
 
+import { constants } from 'node:fs'
+import { access, stat } from 'node:fs/promises'
+import { isAbsolute } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
@@ -73,6 +76,8 @@ export const inject = ['tools', 'systemPrompt', 'subprocess']
 export interface Config {
   /** Whether an over-cap `glob` page is sampled across top-level entries instead of taking the modification-time head. */
   sampleOverCapGlobResults: boolean
+  /** Absolute deployment-supplied ripgrep executable; omitted for the npm-packaged platform binary. */
+  ripgrepPath?: string
   /** Max paths one `glob` call retains inline; later paths go to the formatted spill file. */
   globMaxResults?: number
   /** Max flat matches one `grep` call retains inline; later matches go to the formatted spill file. */
@@ -96,6 +101,7 @@ export interface Config {
 
 export const Config: z<Config> = z.object({
   sampleOverCapGlobResults: z.boolean().required(),
+  ripgrepPath: z.string(),
   globMaxResults: z.number().default(GLOB_MAX_RESULTS),
   grepMaxMatches: z.number().default(GREP_MAX_MATCHES),
   grepMaxLineBytes: z.number().default(GREP_MAX_LINE_BYTES),
@@ -106,8 +112,8 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().default(SEARCH_TIMEOUT_MS),
 })
 
-/** The shape after schemastery applied the defaults. */
-type ResolvedConfig = Required<Config>
+/** The shape after schemastery applied the numeric defaults. */
+type ResolvedConfig = Required<Omit<Config, 'ripgrepPath'>> & Pick<Config, 'ripgrepPath'>
 
 /** Every search cap counts items/bytes/milliseconds — a positive integer, or retention and timeout arithmetic misbehaves silently. */
 function assertPositiveInteger(name: string, value: number): void {
@@ -117,14 +123,34 @@ function assertPositiveInteger(name: string, value: number): void {
 }
 
 /**
- * Register the `glob`/`grep` filesystem discovery tool suite. The packaged
- * ripgrep binary is always available (an npm dependency), so registration is
- * unconditional.
+ * Validate a deployment-supplied ripgrep executable before registering tools.
+ * The ordinary npm path remains lazy because its optional platform package is
+ * intentionally diagnosed at the first search call.
+ * @param path - configured executable path, or `undefined` for npm resolution.
+ * @returns the accepted absolute executable path.
+ */
+async function resolveConfiguredRipgrepPath(path: string | undefined): Promise<string | undefined> {
+  if (path === undefined) return undefined
+  if (path.trim().length === 0 || !isAbsolute(path)) {
+    throw new Error('tool-fs-search: ripgrepPath must be a non-empty absolute path')
+  }
+  try {
+    const metadata = await stat(path)
+    if (!metadata.isFile()) throw new Error('path is not a regular file')
+    await access(path, constants.X_OK)
+  } catch (cause: unknown) {
+    throw new Error(`tool-fs-search: ripgrepPath is not an executable file: ${path}`, { cause })
+  }
+  return path
+}
+
+/**
+ * Register the `glob`/`grep` filesystem discovery tool suite after validating
+ * any deployment-supplied executable. The npm-packaged default remains lazy.
  *
  * @param ctx - plugin context; registrations are effects scoped to this plugin.
  * @param config - resolved plugin configuration from schemastery.
  */
-// oxlint-disable-next-line typescript/require-await -- async keeps a load-time config rejection a rejection, not a synchronous throw
 export async function apply(ctx: Context, config: Config): Promise<void> {
   // schemastery (Config) has already filled every defaulted field.
   const resolved = config as ResolvedConfig
@@ -139,7 +165,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }
   assertPositiveInteger('stderrMaxBytes', resolved.stderrMaxBytes)
   assertPositiveInteger('timeoutMs', resolved.timeoutMs)
+  const ripgrepPath = await resolveConfiguredRipgrepPath(resolved.ripgrepPath)
+  const ripgrepCaps = ripgrepPath === undefined ? {} : { ripgrepPath }
   applyGlobTool(ctx, {
+    ...ripgrepCaps,
     sampleOverCapGlobResults: resolved.sampleOverCapGlobResults,
     maxResults: resolved.globMaxResults,
     maxMetaBytes: resolved.searchMetaMaxBytes,
@@ -149,6 +178,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     timeoutMs: resolved.timeoutMs,
   })
   applyGrepTool(ctx, {
+    ...ripgrepCaps,
     maxMatches: resolved.grepMaxMatches,
     maxLineBytes: resolved.grepMaxLineBytes,
     maxMetaBytes: resolved.searchMetaMaxBytes,
