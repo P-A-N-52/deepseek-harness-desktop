@@ -23,7 +23,10 @@ importers:
         version: link:packages/session-query/tool-session-query
       '@stylistic/eslint-plugin':
         specifier: ^5.10.0
-        version: 5.10.0(eslint@10.5.0(jiti@2.7.0))
+        version: 5.10.0(eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0))
+      '@tauri-apps/cli':
+        specifier: 2.11.4
+        version: 2.11.4
       '@testing-library/dom':
         specifier: ^10.4.1
         version: 10.4.1
@@ -53,7 +56,7 @@ importers:
         version: 4.17.1
       eslint-plugin-sonarjs:
         specifier: ^4.1.0
-        version: 4.1.0(eslint@10.5.0(jiti@2.7.0))
+        version: 4.1.0(eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0))
       execa:
         specifier: ^10.0.0
         version: 10.0.0
@@ -83,10 +86,10 @@ importers:
         version: 1.32.0
       mdast-util-from-markdown:
         specifier: ^2.0.3
-        version: 2.0.3
+        version: 2.0.3(supports-color@9.4.0)
       mdast-util-gfm:
         specifier: ^3.1.0
-        version: 3.1.0
+        version: 3.1.0(supports-color@9.4.0)
       mermaid:
         specifier: 11.16.0
         version: 11.16.0
@@ -119,7 +122,7 @@ importers:
         version: 6.0.3
       vite-tsconfig-paths:
         specifier: ^6.1.1
-        version: 6.1.1(typescript@6.0.3)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+        version: 6.1.1(supports-color@9.4.0)(typescript@6.0.3)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
       vitest:
         specifier: ^4.1.8
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
@@ -397,7 +400,7 @@ importers:
         version: 18.3.7(@types/react@18.3.31)
       '@vitejs/plugin-react':
         specifier: ^4.0.0
-        version: 4.7.0(vite@6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
+        version: 4.7.0(supports-color@9.4.0)(vite@6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
       fflate:
         specifier: ^0.8.2
         version: 0.8.3
@@ -740,6 +743,591 @@ importers:
       '@deepseek-ai/dsh-workflow-worker-thread':
         specifier: workspace:*
         version: link:../packages/workflow/workflow-worker-thread
+
+  native/desktop-runtime:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-group':
+        specifier: workspace:^
+        version: link:../../vendor/group
+      '@deepseek-ai/cordis-plugin-hmr':
+        specifier: workspace:^
+        version: link:../../vendor/hmr
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:^
+        version: link:../../vendor/include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:^
+        version: link:../../vendor/loader
+      '@deepseek-ai/cordis-plugin-timer':
+        specifier: workspace:^
+        version: link:../../vendor/timer
+      '@deepseek-ai/cosmokit':
+        specifier: link:../../vendor/cosmokit
+        version: link:../../vendor/cosmokit
+      '@deepseek-ai/dsh':
+        specifier: workspace:^
+        version: link:../../apps/cli
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:^
+        version: link:../../packages/core/agent
+      '@deepseek-ai/dsh-agent-default-model':
+        specifier: workspace:^
+        version: link:../../packages/core/agent-default-model
+      '@deepseek-ai/dsh-agent-instructions':
+        specifier: workspace:^
+        version: link:../../packages/context/agent-instructions
+      '@deepseek-ai/dsh-agent-loop':
+        specifier: workspace:^
+        version: link:../../packages/core/agent-loop
+      '@deepseek-ai/dsh-agent-presets':
+        specifier: workspace:^
+        version: link:../../packages/preset/agent-presets
+      '@deepseek-ai/dsh-agent-tool-presentation':
+        specifier: workspace:^
+        version: link:../../packages/core/agent-tool-presentation
+      '@deepseek-ai/dsh-anonymous-user-id':
+        specifier: workspace:^
+        version: link:../../packages/identity/anonymous-user-id
+      '@deepseek-ai/dsh-api-gateway':
+        specifier: workspace:^
+        version: link:../../packages/api/gateway
+      '@deepseek-ai/dsh-api-remotes':
+        specifier: workspace:^
+        version: link:../../packages/api/remotes
+      '@deepseek-ai/dsh-app-boot':
+        specifier: workspace:^
+        version: link:../../packages/boot/app-boot
+      '@deepseek-ai/dsh-atomic-write':
+        specifier: workspace:^
+        version: link:../../packages/util/atomic-write
+      '@deepseek-ai/dsh-attachment':
+        specifier: workspace:^
+        version: link:../../packages/attachment/attachment
+      '@deepseek-ai/dsh-attachment-local':
+        specifier: workspace:^
+        version: link:../../packages/attachment/attachment-local
+      '@deepseek-ai/dsh-base':
+        specifier: workspace:^
+        version: link:../../packages/bundle/base
+      '@deepseek-ai/dsh-bash-local':
+        specifier: workspace:^
+        version: link:../../packages/shell/bash-local
+      '@deepseek-ai/dsh-bash-sandbox':
+        specifier: workspace:^
+        version: link:../../packages/shell/bash-sandbox
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../packages/util/brand
+      '@deepseek-ai/dsh-client-connection':
+        specifier: workspace:^
+        version: link:../../packages/client/connection
+      '@deepseek-ai/dsh-client-hmr':
+        specifier: workspace:^
+        version: link:../../packages/client/hmr
+      '@deepseek-ai/dsh-client-locale':
+        specifier: workspace:^
+        version: link:../../packages/client/locale
+      '@deepseek-ai/dsh-client-modules':
+        specifier: workspace:^
+        version: link:../../packages/client/modules
+      '@deepseek-ai/dsh-client-runtime':
+        specifier: workspace:^
+        version: link:../../packages/client/runtime
+      '@deepseek-ai/dsh-client-schema-form':
+        specifier: workspace:^
+        version: link:../../packages/client/schema-form
+      '@deepseek-ai/dsh-client-ui-agent-preset':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-agent-preset
+      '@deepseek-ai/dsh-client-ui-attachment':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-attachment
+      '@deepseek-ai/dsh-client-ui-commands':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-commands
+      '@deepseek-ai/dsh-client-ui-conversation':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-conversation
+      '@deepseek-ai/dsh-client-ui-cordis':
+        specifier: workspace:^
+        version: link:../../packages/extensions/ui-cordis
+      '@deepseek-ai/dsh-client-ui-deliverables':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-deliverables
+      '@deepseek-ai/dsh-client-ui-directory-picker-browse':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-directory-picker-browse
+      '@deepseek-ai/dsh-client-ui-directory-picker-native':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-directory-picker-native
+      '@deepseek-ai/dsh-client-ui-goal':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-goal
+      '@deepseek-ai/dsh-client-ui-input-trigger':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-input-trigger
+      '@deepseek-ai/dsh-client-ui-jobs':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-jobs
+      '@deepseek-ai/dsh-client-ui-layout':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-layout
+      '@deepseek-ai/dsh-client-ui-message-feedback':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-message-feedback
+      '@deepseek-ai/dsh-client-ui-model-selection':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-model-selection
+      '@deepseek-ai/dsh-client-ui-permission-presets':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-permission-presets
+      '@deepseek-ai/dsh-client-ui-plan':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-plan
+      '@deepseek-ai/dsh-client-ui-primitives':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-primitives
+      '@deepseek-ai/dsh-client-ui-settings':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-settings
+      '@deepseek-ai/dsh-client-ui-settings-general':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-settings-general
+      '@deepseek-ai/dsh-client-ui-settings-models':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-settings-models
+      '@deepseek-ai/dsh-client-ui-settings-plugin-inventory':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-settings-plugin-inventory
+      '@deepseek-ai/dsh-client-ui-settings-plugins':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-settings-plugins
+      '@deepseek-ai/dsh-client-ui-sidebar':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-sidebar
+      '@deepseek-ai/dsh-client-ui-skill':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-skill
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-slots
+      '@deepseek-ai/dsh-client-ui-subagent':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-subagent
+      '@deepseek-ai/dsh-client-ui-theme':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-theme
+      '@deepseek-ai/dsh-client-ui-tool':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-tool
+      '@deepseek-ai/dsh-client-ui-trajectory':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-trajectory
+      '@deepseek-ai/dsh-client-ui-user-questions':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-user-questions
+      '@deepseek-ai/dsh-client-ui-workflow-run':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-workflow-run
+      '@deepseek-ai/dsh-client-ui-workspace':
+        specifier: workspace:^
+        version: link:../../packages/client/ui-workspace
+      '@deepseek-ai/dsh-client-web':
+        specifier: workspace:^
+        version: link:../../packages/client/web
+      '@deepseek-ai/dsh-client-web-react':
+        specifier: workspace:^
+        version: link:../../packages/client/web-react
+      '@deepseek-ai/dsh-cmdline':
+        specifier: workspace:^
+        version: link:../../packages/boot/cmdline
+      '@deepseek-ai/dsh-code-runtime':
+        specifier: workspace:^
+        version: link:../../packages/code-runtime/code-runtime
+      '@deepseek-ai/dsh-code-runtime-worker-thread':
+        specifier: workspace:^
+        version: link:../../packages/code-runtime/code-runtime-worker-thread
+      '@deepseek-ai/dsh-command-compact':
+        specifier: workspace:^
+        version: link:../../packages/compaction/command-compact
+      '@deepseek-ai/dsh-command-feedback':
+        specifier: workspace:^
+        version: link:../../packages/feedback/command-feedback
+      '@deepseek-ai/dsh-command-goal':
+        specifier: workspace:^
+        version: link:../../packages/goal/command-goal
+      '@deepseek-ai/dsh-commands':
+        specifier: workspace:^
+        version: link:../../packages/interaction/commands
+      '@deepseek-ai/dsh-compaction':
+        specifier: workspace:^
+        version: link:../../packages/compaction/compaction
+      '@deepseek-ai/dsh-compaction-basic':
+        specifier: workspace:^
+        version: link:../../packages/compaction/compaction-basic
+      '@deepseek-ai/dsh-compaction-tool-result-pruner':
+        specifier: workspace:^
+        version: link:../../packages/compaction/compaction-tool-result-pruner
+      '@deepseek-ai/dsh-cordis-client-runner':
+        specifier: workspace:^
+        version: link:../../packages/extensions/cordis-client-runner
+      '@deepseek-ai/dsh-cordis-host-runner':
+        specifier: workspace:^
+        version: link:../../packages/extensions/cordis-host-runner
+      '@deepseek-ai/dsh-credentials':
+        specifier: workspace:^
+        version: link:../../packages/credentials/credentials
+      '@deepseek-ai/dsh-credentials-local':
+        specifier: workspace:^
+        version: link:../../packages/credentials/credentials-local
+      '@deepseek-ai/dsh-fs':
+        specifier: workspace:^
+        version: link:../../packages/fs/fs
+      '@deepseek-ai/dsh-fs-local':
+        specifier: workspace:^
+        version: link:../../packages/fs/fs-local
+      '@deepseek-ai/dsh-fs-observation-policy':
+        specifier: workspace:^
+        version: link:../../packages/fs/fs-observation-policy
+      '@deepseek-ai/dsh-fs-sandbox':
+        specifier: workspace:^
+        version: link:../../packages/fs/fs-sandbox
+      '@deepseek-ai/dsh-goal':
+        specifier: workspace:^
+        version: link:../../packages/goal/goal
+      '@deepseek-ai/dsh-goal-round-driver':
+        specifier: workspace:^
+        version: link:../../packages/goal/goal-round-driver
+      '@deepseek-ai/dsh-headless':
+        specifier: workspace:^
+        version: link:../../packages/bundle/headless
+      '@deepseek-ai/dsh-home-paths':
+        specifier: workspace:^
+        version: link:../../packages/util/home-paths
+      '@deepseek-ai/dsh-host-apiproxy':
+        specifier: workspace:^
+        version: link:../../packages/host/apiproxy
+      '@deepseek-ai/dsh-host-directory-picker':
+        specifier: workspace:^
+        version: link:../../packages/host/directory-picker
+      '@deepseek-ai/dsh-host-directory-picker-auto':
+        specifier: workspace:^
+        version: link:../../packages/host/directory-picker-auto
+      '@deepseek-ai/dsh-host-directory-picker-browse':
+        specifier: workspace:^
+        version: link:../../packages/host/directory-picker-browse
+      '@deepseek-ai/dsh-host-directory-picker-native':
+        specifier: workspace:^
+        version: link:../../packages/host/directory-picker-native
+      '@deepseek-ai/dsh-host-frontend-static':
+        specifier: workspace:^
+        version: link:../../packages/host/frontend-static
+      '@deepseek-ai/dsh-host-plugin-inventory':
+        specifier: workspace:^
+        version: link:../../packages/host/plugin-inventory
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: workspace:^
+        version: link:../../packages/host/webserver
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../packages/runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-jobs':
+        specifier: workspace:^
+        version: link:../../packages/jobs/jobs
+      '@deepseek-ai/dsh-jobs-local':
+        specifier: workspace:^
+        version: link:../../packages/jobs/jobs-local
+      '@deepseek-ai/dsh-launch-environment':
+        specifier: workspace:^
+        version: link:../../packages/util/launch-environment
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../packages/llm/llm
+      '@deepseek-ai/dsh-llm-deepseek':
+        specifier: workspace:^
+        version: link:../../packages/llm/llm-deepseek
+      '@deepseek-ai/dsh-llm-pi-ai':
+        specifier: workspace:^
+        version: link:../../packages/llm/llm-pi-ai
+      '@deepseek-ai/dsh-llm-retry':
+        specifier: workspace:^
+        version: link:../../packages/llm/llm-retry
+      '@deepseek-ai/dsh-mcp-client':
+        specifier: workspace:^
+        version: link:../../packages/mcp/mcp-client
+      '@deepseek-ai/dsh-message-feedback':
+        specifier: workspace:^
+        version: link:../../packages/feedback/message-feedback
+      '@deepseek-ai/dsh-native-command':
+        specifier: workspace:^
+        version: link:../../packages/util/native-command
+      '@deepseek-ai/dsh-output-retention':
+        specifier: workspace:^
+        version: link:../../packages/util/output-retention
+      '@deepseek-ai/dsh-permission-presets':
+        specifier: workspace:^
+        version: link:../../packages/interaction/permission-presets
+      '@deepseek-ai/dsh-persona':
+        specifier: workspace:^
+        version: link:../../packages/preset/persona
+      '@deepseek-ai/dsh-plan-mode':
+        specifier: workspace:^
+        version: link:../../packages/plan/plan-mode
+      '@deepseek-ai/dsh-pwsh-local':
+        specifier: workspace:^
+        version: link:../../packages/shell/pwsh-local
+      '@deepseek-ai/dsh-pwsh-sandbox':
+        specifier: workspace:^
+        version: link:../../packages/shell/pwsh-sandbox
+      '@deepseek-ai/dsh-repeat-tool-reminder':
+        specifier: workspace:^
+        version: link:../../packages/guard/repeat-tool-reminder
+      '@deepseek-ai/dsh-sandbox':
+        specifier: workspace:^
+        version: link:../../packages/sandbox/sandbox
+      '@deepseek-ai/dsh-sandbox-local':
+        specifier: workspace:^
+        version: link:../../packages/sandbox/sandbox-local
+      '@deepseek-ai/dsh-sandbox-policy':
+        specifier: workspace:^
+        version: link:../../packages/sandbox/sandbox-policy
+      '@deepseek-ai/dsh-sandbox-windows-acl':
+        specifier: workspace:^
+        version: link:../../packages/sandbox/sandbox-windows-acl
+      '@deepseek-ai/dsh-schedule':
+        specifier: workspace:^
+        version: link:../../packages/schedule/schedule
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:^
+        version: link:../../packages/core/scope
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:^
+        version: link:../../packages/core/session
+      '@deepseek-ai/dsh-session-checkpoint-policy':
+        specifier: workspace:^
+        version: link:../../packages/session/session-checkpoint-policy
+      '@deepseek-ai/dsh-session-log-export':
+        specifier: workspace:^
+        version: link:../../packages/session-query/session-log-export
+      '@deepseek-ai/dsh-session-persistence':
+        specifier: workspace:^
+        version: link:../../packages/session/session-persistence
+      '@deepseek-ai/dsh-session-persistence-jsonl':
+        specifier: workspace:^
+        version: link:../../packages/session/session-persistence-jsonl
+      '@deepseek-ai/dsh-session-projection':
+        specifier: workspace:^
+        version: link:../../packages/session/session-projection
+      '@deepseek-ai/dsh-session-projection-cache':
+        specifier: workspace:^
+        version: link:../../packages/session/session-projection-cache
+      '@deepseek-ai/dsh-session-query':
+        specifier: workspace:^
+        version: link:../../packages/session-query/session-query
+      '@deepseek-ai/dsh-session-query-sqlite':
+        specifier: workspace:^
+        version: link:../../packages/session-query/session-query-sqlite
+      '@deepseek-ai/dsh-session-reference':
+        specifier: workspace:^
+        version: link:../../packages/context/session-reference
+      '@deepseek-ai/dsh-session-stats':
+        specifier: workspace:^
+        version: link:../../packages/session/session-stats
+      '@deepseek-ai/dsh-session-telemetry':
+        specifier: workspace:^
+        version: link:../../packages/session/session-telemetry
+      '@deepseek-ai/dsh-session-telemetry-otel':
+        specifier: workspace:^
+        version: link:../../packages/session/session-telemetry-otel
+      '@deepseek-ai/dsh-session-title':
+        specifier: workspace:^
+        version: link:../../packages/session/session-title
+      '@deepseek-ai/dsh-session-title-first-prompt-llm':
+        specifier: workspace:^
+        version: link:../../packages/session/session-title-first-prompt-llm
+      '@deepseek-ai/dsh-session-title-llm':
+        specifier: workspace:^
+        version: link:../../packages/session/session-title-llm
+      '@deepseek-ai/dsh-settings':
+        specifier: workspace:^
+        version: link:../../packages/settings/settings
+      '@deepseek-ai/dsh-settings-file':
+        specifier: workspace:^
+        version: link:../../packages/settings/settings-file
+      '@deepseek-ai/dsh-shell':
+        specifier: workspace:^
+        version: link:../../packages/shell/shell
+      '@deepseek-ai/dsh-shell-env':
+        specifier: workspace:^
+        version: link:../../packages/shell/shell-env
+      '@deepseek-ai/dsh-skill':
+        specifier: workspace:^
+        version: link:../../packages/skill/skill
+      '@deepseek-ai/dsh-skill-badge':
+        specifier: workspace:^
+        version: link:../../packages/skill/skill-badge
+      '@deepseek-ai/dsh-skill-filesystem':
+        specifier: workspace:^
+        version: link:../../packages/skill/skill-filesystem
+      '@deepseek-ai/dsh-spill':
+        specifier: workspace:^
+        version: link:../../packages/spill/spill
+      '@deepseek-ai/dsh-spill-local':
+        specifier: workspace:^
+        version: link:../../packages/spill/spill-local
+      '@deepseek-ai/dsh-spill-policy':
+        specifier: workspace:^
+        version: link:../../packages/spill/spill-policy
+      '@deepseek-ai/dsh-storage':
+        specifier: workspace:^
+        version: link:../../packages/storage/storage
+      '@deepseek-ai/dsh-storage-domain':
+        specifier: workspace:^
+        version: link:../../packages/storage/storage-domain
+      '@deepseek-ai/dsh-storage-json':
+        specifier: workspace:^
+        version: link:../../packages/storage/storage-json
+      '@deepseek-ai/dsh-subagent':
+        specifier: workspace:^
+        version: link:../../packages/subagent/subagent
+      '@deepseek-ai/dsh-subagent-fork-in-process':
+        specifier: workspace:^
+        version: link:../../packages/subagent/subagent-fork-in-process
+      '@deepseek-ai/dsh-subagent-in-process-driver':
+        specifier: workspace:^
+        version: link:../../packages/subagent/subagent-in-process-driver
+      '@deepseek-ai/dsh-subagent-spawn-in-process':
+        specifier: workspace:^
+        version: link:../../packages/subagent/subagent-spawn-in-process
+      '@deepseek-ai/dsh-subprocess':
+        specifier: workspace:^
+        version: link:../../packages/subprocess/subprocess
+      '@deepseek-ai/dsh-subprocess-local':
+        specifier: workspace:^
+        version: link:../../packages/subprocess/subprocess-local
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:^
+        version: link:../../packages/core/system-prompt
+      '@deepseek-ai/dsh-terminal':
+        specifier: workspace:^
+        version: link:../../packages/terminal/terminal
+      '@deepseek-ai/dsh-terminal-bash':
+        specifier: workspace:^
+        version: link:../../packages/terminal/terminal-bash
+      '@deepseek-ai/dsh-time-context':
+        specifier: workspace:^
+        version: link:../../packages/context/time-context
+      '@deepseek-ai/dsh-timeout':
+        specifier: workspace:^
+        version: link:../../packages/util/timeout
+      '@deepseek-ai/dsh-tmux-context':
+        specifier: workspace:^
+        version: link:../../packages/context/tmux-context
+      '@deepseek-ai/dsh-token-meter':
+        specifier: workspace:^
+        version: link:../../packages/llm/token-meter
+      '@deepseek-ai/dsh-tool-ask-user':
+        specifier: workspace:^
+        version: link:../../packages/interaction/tool-ask-user
+      '@deepseek-ai/dsh-tool-bash':
+        specifier: workspace:^
+        version: link:../../packages/shell/tool-bash
+      '@deepseek-ai/dsh-tool-bash-persistent':
+        specifier: workspace:^
+        version: link:../../packages/shell/tool-bash-persistent
+      '@deepseek-ai/dsh-tool-call-timeout-policy':
+        specifier: workspace:^
+        version: link:../../packages/guard/timeout-policy
+      '@deepseek-ai/dsh-tool-cordis':
+        specifier: workspace:^
+        version: link:../../packages/extensions/tool-cordis
+      '@deepseek-ai/dsh-tool-fs':
+        specifier: workspace:^
+        version: link:../../packages/fs/tool-fs
+      '@deepseek-ai/dsh-tool-fs-search':
+        specifier: workspace:^
+        version: link:../../packages/fs/tool-fs-search
+      '@deepseek-ai/dsh-tool-goal':
+        specifier: workspace:^
+        version: link:../../packages/goal/tool-goal
+      '@deepseek-ai/dsh-tool-jobs':
+        specifier: workspace:^
+        version: link:../../packages/jobs/tool-jobs
+      '@deepseek-ai/dsh-tool-pwsh':
+        specifier: workspace:^
+        version: link:../../packages/shell/tool-pwsh
+      '@deepseek-ai/dsh-tool-ralph':
+        specifier: workspace:^
+        version: link:../../packages/workflow/tool-ralph
+      '@deepseek-ai/dsh-tool-skill':
+        specifier: workspace:^
+        version: link:../../packages/skill/tool-skill
+      '@deepseek-ai/dsh-tool-str-replace-editor':
+        specifier: workspace:^
+        version: link:../../packages/fs/tool-str-replace-editor
+      '@deepseek-ai/dsh-tool-subagent':
+        specifier: workspace:^
+        version: link:../../packages/subagent/tool-subagent
+      '@deepseek-ai/dsh-tool-subagent-control':
+        specifier: workspace:^
+        version: link:../../packages/subagent/tool-subagent-control
+      '@deepseek-ai/dsh-tool-subagent-report':
+        specifier: workspace:^
+        version: link:../../packages/subagent/tool-subagent-report
+      '@deepseek-ai/dsh-tool-todo':
+        specifier: workspace:^
+        version: link:../../packages/todo/tool-todo
+      '@deepseek-ai/dsh-tool-web':
+        specifier: workspace:^
+        version: link:../../packages/web/tool-web
+      '@deepseek-ai/dsh-tool-workflow':
+        specifier: workspace:^
+        version: link:../../packages/workflow/tool-workflow
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:^
+        version: link:../../packages/core/tools
+      '@deepseek-ai/dsh-typert-loader':
+        specifier: workspace:^
+        version: link:../../packages/typert/loader
+      '@deepseek-ai/dsh-typert-protocol':
+        specifier: workspace:^
+        version: link:../../packages/typert/protocol
+      '@deepseek-ai/dsh-typert-registry':
+        specifier: workspace:^
+        version: link:../../packages/typert/registry
+      '@deepseek-ai/dsh-user-approval':
+        specifier: workspace:^
+        version: link:../../packages/interaction/user-approval
+      '@deepseek-ai/dsh-user-questions':
+        specifier: workspace:^
+        version: link:../../packages/interaction/user-questions
+      '@deepseek-ai/dsh-web':
+        specifier: workspace:^
+        version: link:../../packages/web/web
+      '@deepseek-ai/dsh-web-app':
+        specifier: workspace:^
+        version: link:../../packages/bundle/web-app
+      '@deepseek-ai/dsh-web-frontend':
+        specifier: workspace:^
+        version: link:../../apps/web
+      '@deepseek-ai/dsh-web-search-deepseek':
+        specifier: workspace:^
+        version: link:../../packages/web/web-search-deepseek
+      '@deepseek-ai/dsh-workflow':
+        specifier: workspace:^
+        version: link:../../packages/workflow/workflow
+      '@deepseek-ai/dsh-workflow-worker-thread':
+        specifier: workspace:^
+        version: link:../../packages/workflow/workflow-worker-thread
+      '@deepseek-ai/dsh-workspace':
+        specifier: workspace:^
+        version: link:../../packages/workspace/workspace
+      '@deepseek-ai/schemastery':
+        specifier: link:../../vendor/schemastery
+        version: link:../../vendor/schemastery
 
   native/landlock-run:
     devDependencies:
@@ -1562,6 +2150,9 @@ importers:
       '@deepseek-ai/cordis-plugin-loader':
         specifier: workspace:^
         version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-app-boot':
+        specifier: workspace:^
+        version: link:../../boot/app-boot
       '@deepseek-ai/dsh-host-webserver':
         specifier: workspace:^
         version: link:../../host/webserver
@@ -2344,13 +2935,13 @@ importers:
         version: 0.16.47
       mdast-util-from-markdown:
         specifier: ^2.0.3
-        version: 2.0.3
+        version: 2.0.3(supports-color@9.4.0)
       mdast-util-gfm:
         specifier: ^3.1.0
-        version: 3.1.0
+        version: 3.1.0(supports-color@9.4.0)
       mdast-util-math:
         specifier: ^3.0.0
-        version: 3.0.0
+        version: 3.0.0(supports-color@9.4.0)
       micromark-core-commonmark:
         specifier: ^2.0.3
         version: 2.0.3
@@ -5250,7 +5841,7 @@ importers:
         version: link:../../../vendor/schemastery
       '@earendil-works/pi-ai':
         specifier: ^0.82.1
-        version: 0.82.1(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(ws@8.21.0)(zod@4.4.3)
+        version: 0.82.1(@modelcontextprotocol/sdk@1.29.0(supports-color@9.4.0)(zod@4.4.3))(supports-color@9.4.0)(ws@8.21.0)(zod@4.4.3)
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^
@@ -5477,7 +6068,7 @@ importers:
         version: link:../../../vendor/schemastery
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
-        version: 1.29.0(zod@4.4.3)
+        version: 1.29.0(supports-color@9.4.0)(zod@4.4.3)
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -5502,10 +6093,10 @@ importers:
         version: link:../../core/tools
       '@modelcontextprotocol/server-everything':
         specifier: ^2026.7.4
-        version: 2026.7.4
+        version: 2026.7.4(supports-color@9.4.0)
       '@modelcontextprotocol/server-filesystem':
         specifier: ^2026.7.4
-        version: 2026.7.10(zod@4.4.3)
+        version: 2026.7.10(supports-color@9.4.0)(zod@4.4.3)
 
   packages/plan/plan-mode:
     dependencies:
@@ -7067,7 +7658,7 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.220
-        version: 0.3.220(@anthropic-ai/sdk@0.93.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+        version: 0.3.220(@anthropic-ai/sdk@0.93.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(supports-color@9.4.0)(zod@4.4.3))(zod@4.4.3)
       '@anthropic-ai/sdk':
         specifier: 0.93.0
         version: 0.93.0(zod@4.4.3)
@@ -7635,7 +8226,7 @@ importers:
         version: link:../loader-smoke
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@opentelemetry/api@1.9.0)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+        version: 4.1.8(@opentelemetry/api@1.9.0)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^
@@ -7684,7 +8275,7 @@ importers:
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^
@@ -8768,7 +9359,7 @@ importers:
         version: 1.11.21
       debug:
         specifier: 4.4.3
-        version: 4.4.3
+        version: 4.4.3(supports-color@9.4.0)
       mermaid:
         specifier: 11.16.0
         version: 11.16.0
@@ -11116,6 +11707,82 @@ packages:
 
   '@tanstack/virtual-core@3.17.7':
     resolution: {integrity: sha512-bp+v10y65sp2H7WpWfIMyxTNfl8ZVfxFTLRjPIFRryi6FV/J33z4IS53WO4pTk36KlvJ4iLiQz+oaydDC1xbcA==}
+
+  '@tauri-apps/cli-darwin-arm64@2.11.4':
+    resolution: {integrity: sha512-1ryOF3ZhpZ/nemHV5zVwBQBz9jDGKmKPvWPADOhc83ig0P4bMc2iER4NbC6r9sjeIZ6RVQ4g3RZIYvezhcl4TQ==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@tauri-apps/cli-darwin-x64@2.11.4':
+    resolution: {integrity: sha512-uFsGQAAfuyz1k/yGLmkWfkBlgKAqZfxqlHmLWx81QU27RJWfmbNHCIq8T8w1e+VClleIuZUjpHWfoE4E3DLo3A==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@tauri-apps/cli-linux-arm-gnueabihf@2.11.4':
+    resolution: {integrity: sha512-IaHZn5CdBL21oUmjiVOS1ctw6Ip1O0pjp70FwOWmYz1myWe0SY96ZIj2FYf7pT0m8bI2h/hrs5ZbEXXh44/MkQ==}
+    engines: {node: '>= 10'}
+    cpu: [arm]
+    os: [linux]
+
+  '@tauri-apps/cli-linux-arm64-gnu@2.11.4':
+    resolution: {integrity: sha512-N41/ukTRVe6XSuUTESuFdGeOW2i7k62tK+6gHK5Kd5/q5RPvvi19GaWAVPPb9u95HSGmTChSolBfzynUsssFaA==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@tauri-apps/cli-linux-arm64-musl@2.11.4':
+    resolution: {integrity: sha512-v277UnT/fB64xAfSroL5N3Km3tLmvATWqJJw/wRI+g6o+HkeD0slyE7gOhNs1MbjE41R7bQOTxMVoL3aomUJmw==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@tauri-apps/cli-linux-riscv64-gnu@2.11.4':
+    resolution: {integrity: sha512-qqgNkQ2u1yZHxjhxsZaxUtRDW8dIqIYm33rx/mzwQv0SfY9x1B+iraj8vWeFiXjjSVVhEMepXSOts1TqPzvXNQ==}
+    engines: {node: '>= 10'}
+    cpu: [riscv64]
+    os: [linux]
+    libc: [glibc]
+
+  '@tauri-apps/cli-linux-x64-gnu@2.11.4':
+    resolution: {integrity: sha512-2VRNWl84FOH0m2giiDkO2h0QXlcMJeX+zJDpI5kDIQAx6s+geF3v48F4DXfJez4GS/FdoDGnPnw1C2iYGbQ7bQ==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@tauri-apps/cli-linux-x64-musl@2.11.4':
+    resolution: {integrity: sha512-o9GyhYor/nc7xarmwDE3ka2szuW3uuZzXjHWh64Q8YX5AtSgxdQkFWzrY4O8KiGtVNvFBI14H3Q49Qj5TOIP/A==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@tauri-apps/cli-win32-arm64-msvc@2.11.4':
+    resolution: {integrity: sha512-ld5Ehb598m0VkYyylRPNeCFsBe/km0jxis6KgMpl3IGY6I/i1RwQXO05I1AsXUXO2WC6AvB/Lw4qTf/asiuEiQ==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@tauri-apps/cli-win32-ia32-msvc@2.11.4':
+    resolution: {integrity: sha512-12Hxi0XX/H5VFxO/bGgHkFWhml9VMgEOu9CidjeCeTNQ1l6fpUlbiGgSP7CLI3PFtW9/FfbeHieZ+kyWK5H7CA==}
+    engines: {node: '>= 10'}
+    cpu: [ia32]
+    os: [win32]
+
+  '@tauri-apps/cli-win32-x64-msvc@2.11.4':
+    resolution: {integrity: sha512-+vDiqBIU5dMISg/wNvX3sF+ZHfgJGJ5T0AcO+EHNXV9GGAG+P5fzodlDXD3QdKCRgZxMoCm5PPvj3BqLNjBthw==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [win32]
+
+  '@tauri-apps/cli@2.11.4':
+    resolution: {integrity: sha512-R8xGtMpwyetawSqm9kYOuMmEqkhUbvcUy8n0aNXIxollKBLESUu5f4Fx+64hgASYm1H+jSWq6jCW6zqTnH6hqQ==}
+    engines: {node: '>= 10'}
+    hasBin: true
 
   '@testing-library/dom@10.4.1':
     resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}
@@ -14403,10 +15070,10 @@ snapshots:
   '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.220':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk@0.3.220(@anthropic-ai/sdk@0.93.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)':
+  '@anthropic-ai/claude-agent-sdk@0.3.220(@anthropic-ai/sdk@0.93.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(supports-color@9.4.0)(zod@4.4.3))(zod@4.4.3)':
     dependencies:
       '@anthropic-ai/sdk': 0.93.0(zod@4.4.3)
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@9.4.0)(zod@4.4.3)
       zod: 4.4.3
     optionalDependencies:
       '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.220
@@ -14681,20 +15348,20 @@ snapshots:
 
   '@babel/compat-data@7.29.7': {}
 
-  '@babel/core@7.29.7':
+  '@babel/core@7.29.7(supports-color@9.4.0)':
     dependencies:
       '@babel/code-frame': 7.29.7
       '@babel/generator': 7.29.7
       '@babel/helper-compilation-targets': 7.29.7
-      '@babel/helper-module-transforms': 7.29.7(@babel/core@7.29.7)
+      '@babel/helper-module-transforms': 7.29.7(@babel/core@7.29.7(supports-color@9.4.0))(supports-color@9.4.0)
       '@babel/helpers': 7.29.7
       '@babel/parser': 7.29.7
       '@babel/template': 7.29.7
-      '@babel/traverse': 7.29.7
+      '@babel/traverse': 7.29.7(supports-color@9.4.0)
       '@babel/types': 7.29.7
       '@jridgewell/remapping': 2.3.5
       convert-source-map: 2.0.0
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@9.4.0)
       gensync: 1.0.0-beta.2
       json5: 2.2.3
       semver: 6.3.1
@@ -14728,19 +15395,19 @@ snapshots:
 
   '@babel/helper-globals@7.29.7': {}
 
-  '@babel/helper-module-imports@7.29.7':
+  '@babel/helper-module-imports@7.29.7(supports-color@9.4.0)':
     dependencies:
-      '@babel/traverse': 7.29.7
+      '@babel/traverse': 7.29.7(supports-color@9.4.0)
       '@babel/types': 7.29.7
     transitivePeerDependencies:
       - supports-color
 
-  '@babel/helper-module-transforms@7.29.7(@babel/core@7.29.7)':
+  '@babel/helper-module-transforms@7.29.7(@babel/core@7.29.7(supports-color@9.4.0))(supports-color@9.4.0)':
     dependencies:
-      '@babel/core': 7.29.7
-      '@babel/helper-module-imports': 7.29.7
+      '@babel/core': 7.29.7(supports-color@9.4.0)
+      '@babel/helper-module-imports': 7.29.7(supports-color@9.4.0)
       '@babel/helper-validator-identifier': 7.29.7
-      '@babel/traverse': 7.29.7
+      '@babel/traverse': 7.29.7(supports-color@9.4.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -14769,14 +15436,14 @@ snapshots:
     dependencies:
       '@babel/types': 8.0.0-rc.6
 
-  '@babel/plugin-transform-react-jsx-self@7.29.7(@babel/core@7.29.7)':
+  '@babel/plugin-transform-react-jsx-self@7.29.7(@babel/core@7.29.7(supports-color@9.4.0))':
     dependencies:
-      '@babel/core': 7.29.7
+      '@babel/core': 7.29.7(supports-color@9.4.0)
       '@babel/helper-plugin-utils': 7.29.7
 
-  '@babel/plugin-transform-react-jsx-source@7.29.7(@babel/core@7.29.7)':
+  '@babel/plugin-transform-react-jsx-source@7.29.7(@babel/core@7.29.7(supports-color@9.4.0))':
     dependencies:
-      '@babel/core': 7.29.7
+      '@babel/core': 7.29.7(supports-color@9.4.0)
       '@babel/helper-plugin-utils': 7.29.7
 
   '@babel/runtime@7.29.7': {}
@@ -14787,7 +15454,7 @@ snapshots:
       '@babel/parser': 7.29.7
       '@babel/types': 7.29.7
 
-  '@babel/traverse@7.29.7':
+  '@babel/traverse@7.29.7(supports-color@9.4.0)':
     dependencies:
       '@babel/code-frame': 7.29.7
       '@babel/generator': 7.29.7
@@ -14795,7 +15462,7 @@ snapshots:
       '@babel/parser': 7.29.7
       '@babel/template': 7.29.7
       '@babel/types': 7.29.7
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@9.4.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -14885,16 +15552,16 @@ snapshots:
     transitivePeerDependencies:
       - '@algolia/client-search'
 
-  '@earendil-works/pi-ai@0.82.1(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(ws@8.21.0)(zod@4.4.3)':
+  '@earendil-works/pi-ai@0.82.1(@modelcontextprotocol/sdk@1.29.0(supports-color@9.4.0)(zod@4.4.3))(supports-color@9.4.0)(ws@8.21.0)(zod@4.4.3)':
     dependencies:
       '@anthropic-ai/sdk': 0.91.1(zod@4.4.3)
       '@aws-sdk/client-bedrock-runtime': 3.1048.0
-      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
+      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.29.0(supports-color@9.4.0)(zod@4.4.3))(supports-color@9.4.0)
       '@mistralai/mistralai': 2.2.6(@opentelemetry/api@1.9.0)
       '@opentelemetry/api': 1.9.0
       '@smithy/node-http-handler': 4.7.3
-      http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
+      http-proxy-agent: 7.0.2(supports-color@9.4.0)
+      https-proxy-agent: 7.0.6(supports-color@9.4.0)
       openai: 6.26.0(ws@8.21.0)(zod@4.4.3)
       partial-json: 0.1.7
       typebox: 1.1.38
@@ -15168,17 +15835,17 @@ snapshots:
   '@esbuild/win32-x64@0.28.1':
     optional: true
 
-  '@eslint-community/eslint-utils@4.9.1(eslint@10.5.0(jiti@2.7.0))':
+  '@eslint-community/eslint-utils@4.9.1(eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0))':
     dependencies:
-      eslint: 10.5.0(jiti@2.7.0)
+      eslint: 10.5.0(jiti@2.7.0)(supports-color@9.4.0)
       eslint-visitor-keys: 3.4.3
 
   '@eslint-community/regexpp@4.12.2': {}
 
-  '@eslint/config-array@0.23.5':
+  '@eslint/config-array@0.23.5(supports-color@9.4.0)':
     dependencies:
       '@eslint/object-schema': 3.0.5
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@9.4.0)
       minimatch: 10.2.5
     transitivePeerDependencies:
       - supports-color
@@ -15200,14 +15867,14 @@ snapshots:
 
   '@exodus/bytes@1.15.1': {}
 
-  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))':
+  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.29.0(supports-color@9.4.0)(zod@4.4.3))(supports-color@9.4.0)':
     dependencies:
-      google-auth-library: 10.7.0
+      google-auth-library: 10.7.0(supports-color@9.4.0)
       p-retry: 4.6.2
       protobufjs: 7.6.4
       ws: 8.21.0
     optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@9.4.0)(zod@4.4.3)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -15461,7 +16128,7 @@ snapshots:
 
   '@mixmark-io/domino@2.2.0': {}
 
-  '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
+  '@modelcontextprotocol/sdk@1.29.0(supports-color@9.4.0)(zod@4.4.3)':
     dependencies:
       '@hono/node-server': 1.19.14(hono@4.12.29)
       ajv: 8.20.0
@@ -15471,8 +16138,8 @@ snapshots:
       cross-spawn: 7.0.6
       eventsource: 3.0.7
       eventsource-parser: 3.1.0
-      express: 5.2.1
-      express-rate-limit: 8.5.2(express@5.2.1)
+      express: 5.2.1(supports-color@9.4.0)
+      express-rate-limit: 8.5.2(express@5.2.1(supports-color@9.4.0))
       hono: 4.12.29
       jose: 6.2.3
       json-schema-typed: 8.0.2
@@ -15483,20 +16150,20 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@modelcontextprotocol/server-everything@2026.7.4':
+  '@modelcontextprotocol/server-everything@2026.7.4(supports-color@9.4.0)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@9.4.0)(zod@4.4.3)
       cors: 2.8.6
-      express: 5.2.1
+      express: 5.2.1(supports-color@9.4.0)
       jszip: 3.10.1
       zod: 4.4.3
     transitivePeerDependencies:
       - '@cfworker/json-schema'
       - supports-color
 
-  '@modelcontextprotocol/server-filesystem@2026.7.10(zod@4.4.3)':
+  '@modelcontextprotocol/server-filesystem@2026.7.10(supports-color@9.4.0)(zod@4.4.3)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@9.4.0)(zod@4.4.3)
       diff: 8.0.4
       glob: 10.5.0
       minimatch: 10.2.5
@@ -16174,11 +16841,11 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@stylistic/eslint-plugin@5.10.0(eslint@10.5.0(jiti@2.7.0))':
+  '@stylistic/eslint-plugin@5.10.0(eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0))':
     dependencies:
-      '@eslint-community/eslint-utils': 4.9.1(eslint@10.5.0(jiti@2.7.0))
+      '@eslint-community/eslint-utils': 4.9.1(eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0))
       '@typescript-eslint/types': 8.61.0
-      eslint: 10.5.0(jiti@2.7.0)
+      eslint: 10.5.0(jiti@2.7.0)(supports-color@9.4.0)
       eslint-visitor-keys: 4.2.1
       espree: 10.4.0
       estraverse: 5.3.0
@@ -16191,6 +16858,53 @@ snapshots:
       react-dom: 18.3.1(react@18.3.1)
 
   '@tanstack/virtual-core@3.17.7': {}
+
+  '@tauri-apps/cli-darwin-arm64@2.11.4':
+    optional: true
+
+  '@tauri-apps/cli-darwin-x64@2.11.4':
+    optional: true
+
+  '@tauri-apps/cli-linux-arm-gnueabihf@2.11.4':
+    optional: true
+
+  '@tauri-apps/cli-linux-arm64-gnu@2.11.4':
+    optional: true
+
+  '@tauri-apps/cli-linux-arm64-musl@2.11.4':
+    optional: true
+
+  '@tauri-apps/cli-linux-riscv64-gnu@2.11.4':
+    optional: true
+
+  '@tauri-apps/cli-linux-x64-gnu@2.11.4':
+    optional: true
+
+  '@tauri-apps/cli-linux-x64-musl@2.11.4':
+    optional: true
+
+  '@tauri-apps/cli-win32-arm64-msvc@2.11.4':
+    optional: true
+
+  '@tauri-apps/cli-win32-ia32-msvc@2.11.4':
+    optional: true
+
+  '@tauri-apps/cli-win32-x64-msvc@2.11.4':
+    optional: true
+
+  '@tauri-apps/cli@2.11.4':
+    optionalDependencies:
+      '@tauri-apps/cli-darwin-arm64': 2.11.4
+      '@tauri-apps/cli-darwin-x64': 2.11.4
+      '@tauri-apps/cli-linux-arm-gnueabihf': 2.11.4
+      '@tauri-apps/cli-linux-arm64-gnu': 2.11.4
+      '@tauri-apps/cli-linux-arm64-musl': 2.11.4
+      '@tauri-apps/cli-linux-riscv64-gnu': 2.11.4
+      '@tauri-apps/cli-linux-x64-gnu': 2.11.4
+      '@tauri-apps/cli-linux-x64-musl': 2.11.4
+      '@tauri-apps/cli-win32-arm64-msvc': 2.11.4
+      '@tauri-apps/cli-win32-ia32-msvc': 2.11.4
+      '@tauri-apps/cli-win32-x64-msvc': 2.11.4
 
   '@testing-library/dom@10.4.1':
     dependencies:
@@ -16464,11 +17178,11 @@ snapshots:
       d3-selection: 3.0.0
       d3-transition: 3.0.1(d3-selection@3.0.0)
 
-  '@vitejs/plugin-react@4.7.0(vite@6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))':
+  '@vitejs/plugin-react@4.7.0(supports-color@9.4.0)(vite@6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
-      '@babel/core': 7.29.7
-      '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7)
-      '@babel/plugin-transform-react-jsx-source': 7.29.7(@babel/core@7.29.7)
+      '@babel/core': 7.29.7(supports-color@9.4.0)
+      '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7(supports-color@9.4.0))
+      '@babel/plugin-transform-react-jsx-source': 7.29.7(@babel/core@7.29.7(supports-color@9.4.0))
       '@rolldown/pluginutils': 1.0.0-beta.27
       '@types/babel__core': 7.20.5
       react-refresh: 0.17.0
@@ -16519,14 +17233,6 @@ snapshots:
       magic-string: 0.30.21
     optionalDependencies:
       vite: 8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
-
-  '@vitest/mocker@4.1.8(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))':
-    dependencies:
-      '@vitest/spy': 4.1.8
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      vite: 8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
 
   '@vitest/pretty-format@4.1.8':
     dependencies:
@@ -16808,11 +17514,11 @@ snapshots:
 
   birpc@4.0.0: {}
 
-  body-parser@2.3.0:
+  body-parser@2.3.0(supports-color@9.4.0):
     dependencies:
       bytes: 3.1.2
       content-type: 2.0.0
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@9.4.0)
       http-errors: 2.0.1
       iconv-lite: 0.7.3
       on-finished: 2.4.1
@@ -17139,9 +17845,11 @@ snapshots:
 
   dayjs@1.11.21: {}
 
-  debug@4.4.3:
+  debug@4.4.3(supports-color@9.4.0):
     dependencies:
       ms: 2.1.3
+    optionalDependencies:
+      supports-color: 9.4.0
 
   decimal.js@10.6.0: {}
 
@@ -17334,12 +18042,12 @@ snapshots:
 
   escape-string-regexp@5.0.0: {}
 
-  eslint-plugin-sonarjs@4.1.0(eslint@10.5.0(jiti@2.7.0)):
+  eslint-plugin-sonarjs@4.1.0(eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0)):
     dependencies:
       '@eslint-community/regexpp': 4.12.2
       builtin-modules: 3.3.0
       bytes: 3.1.2
-      eslint: 10.5.0(jiti@2.7.0)
+      eslint: 10.5.0(jiti@2.7.0)(supports-color@9.4.0)
       functional-red-black-tree: 1.0.1
       globals: 17.7.0
       jsx-ast-utils-x: 0.1.0
@@ -17364,11 +18072,11 @@ snapshots:
 
   eslint-visitor-keys@5.0.1: {}
 
-  eslint@10.5.0(jiti@2.7.0):
+  eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0):
     dependencies:
-      '@eslint-community/eslint-utils': 4.9.1(eslint@10.5.0(jiti@2.7.0))
+      '@eslint-community/eslint-utils': 4.9.1(eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0))
       '@eslint-community/regexpp': 4.12.2
-      '@eslint/config-array': 0.23.5
+      '@eslint/config-array': 0.23.5(supports-color@9.4.0)
       '@eslint/config-helpers': 0.6.0
       '@eslint/core': 1.2.1
       '@eslint/plugin-kit': 0.7.2
@@ -17378,7 +18086,7 @@ snapshots:
       '@types/estree': 1.0.9
       ajv: 6.15.0
       cross-spawn: 7.0.6
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@9.4.0)
       escape-string-regexp: 4.0.0
       eslint-scope: 9.1.2
       eslint-visitor-keys: 5.0.1
@@ -17457,25 +18165,25 @@ snapshots:
 
   expect-type@1.3.0: {}
 
-  express-rate-limit@8.5.2(express@5.2.1):
+  express-rate-limit@8.5.2(express@5.2.1(supports-color@9.4.0)):
     dependencies:
-      express: 5.2.1
+      express: 5.2.1(supports-color@9.4.0)
       ip-address: 10.2.0
 
-  express@5.2.1:
+  express@5.2.1(supports-color@9.4.0):
     dependencies:
       accepts: 2.0.0
-      body-parser: 2.3.0
+      body-parser: 2.3.0(supports-color@9.4.0)
       content-disposition: 1.1.0
       content-type: 1.0.5
       cookie: 0.7.2
       cookie-signature: 1.2.2
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@9.4.0)
       depd: 2.0.0
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
-      finalhandler: 2.1.1
+      finalhandler: 2.1.1(supports-color@9.4.0)
       fresh: 2.0.0
       http-errors: 2.0.1
       merge-descriptors: 2.0.0
@@ -17486,9 +18194,9 @@ snapshots:
       proxy-addr: 2.0.7
       qs: 6.15.3
       range-parser: 1.3.0
-      router: 2.2.0
-      send: 1.2.1
-      serve-static: 2.2.1
+      router: 2.2.0(supports-color@9.4.0)
+      send: 1.2.1(supports-color@9.4.0)
+      serve-static: 2.2.1(supports-color@9.4.0)
       statuses: 2.0.2
       type-is: 2.1.0
       vary: 1.1.2
@@ -17544,9 +18252,9 @@ snapshots:
     dependencies:
       flat-cache: 4.0.1
 
-  finalhandler@2.1.1:
+  finalhandler@2.1.1(supports-color@9.4.0):
     dependencies:
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@9.4.0)
       encodeurl: 2.0.0
       escape-html: 1.0.3
       on-finished: 2.4.1
@@ -17598,17 +18306,17 @@ snapshots:
 
   functional-red-black-tree@1.0.1: {}
 
-  gaxios@7.1.5:
+  gaxios@7.1.5(supports-color@9.4.0):
     dependencies:
       extend: 3.0.2
-      https-proxy-agent: 7.0.6
+      https-proxy-agent: 7.0.6(supports-color@9.4.0)
       node-fetch: 3.3.2
     transitivePeerDependencies:
       - supports-color
 
-  gcp-metadata@8.1.2:
+  gcp-metadata@8.1.2(supports-color@9.4.0):
     dependencies:
-      gaxios: 7.1.5
+      gaxios: 7.1.5(supports-color@9.4.0)
       google-logging-utils: 1.1.3
       json-bigint: 1.0.0
     transitivePeerDependencies:
@@ -17673,12 +18381,12 @@ snapshots:
 
   globrex@0.1.2: {}
 
-  google-auth-library@10.7.0:
+  google-auth-library@10.7.0(supports-color@9.4.0):
     dependencies:
       base64-js: 1.5.1
       ecdsa-sig-formatter: 1.0.11
-      gaxios: 7.1.5
-      gcp-metadata: 8.1.2
+      gaxios: 7.1.5(supports-color@9.4.0)
+      gcp-metadata: 8.1.2(supports-color@9.4.0)
       google-logging-utils: 1.1.3
       jws: 4.0.1
     transitivePeerDependencies:
@@ -17740,17 +18448,17 @@ snapshots:
       statuses: 2.0.2
       toidentifier: 1.0.1
 
-  http-proxy-agent@7.0.2:
+  http-proxy-agent@7.0.2(supports-color@9.4.0):
     dependencies:
       agent-base: 7.1.4
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@9.4.0)
     transitivePeerDependencies:
       - supports-color
 
-  https-proxy-agent@7.0.6:
+  https-proxy-agent@7.0.6(supports-color@9.4.0):
     dependencies:
       agent-base: 7.1.4
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@9.4.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -18145,14 +18853,14 @@ snapshots:
       unist-util-is: 6.0.1
       unist-util-visit-parents: 6.0.2
 
-  mdast-util-from-markdown@2.0.3:
+  mdast-util-from-markdown@2.0.3(supports-color@9.4.0):
     dependencies:
       '@types/mdast': 4.0.4
       '@types/unist': 3.0.3
       decode-named-character-reference: 1.3.0
       devlop: 1.1.0
       mdast-util-to-string: 4.0.0
-      micromark: 4.0.2
+      micromark: 4.0.2(supports-color@9.4.0)
       micromark-util-decode-numeric-character-reference: 2.0.2
       micromark-util-decode-string: 2.0.1
       micromark-util-normalize-identifier: 2.0.1
@@ -18170,62 +18878,62 @@ snapshots:
       mdast-util-find-and-replace: 3.0.2
       micromark-util-character: 2.1.1
 
-  mdast-util-gfm-footnote@2.1.0:
+  mdast-util-gfm-footnote@2.1.0(supports-color@9.4.0):
     dependencies:
       '@types/mdast': 4.0.4
       devlop: 1.1.0
-      mdast-util-from-markdown: 2.0.3
+      mdast-util-from-markdown: 2.0.3(supports-color@9.4.0)
       mdast-util-to-markdown: 2.1.2
       micromark-util-normalize-identifier: 2.0.1
     transitivePeerDependencies:
       - supports-color
 
-  mdast-util-gfm-strikethrough@2.0.0:
+  mdast-util-gfm-strikethrough@2.0.0(supports-color@9.4.0):
     dependencies:
       '@types/mdast': 4.0.4
-      mdast-util-from-markdown: 2.0.3
+      mdast-util-from-markdown: 2.0.3(supports-color@9.4.0)
       mdast-util-to-markdown: 2.1.2
     transitivePeerDependencies:
       - supports-color
 
-  mdast-util-gfm-table@2.0.0:
+  mdast-util-gfm-table@2.0.0(supports-color@9.4.0):
     dependencies:
       '@types/mdast': 4.0.4
       devlop: 1.1.0
       markdown-table: 3.0.4
-      mdast-util-from-markdown: 2.0.3
+      mdast-util-from-markdown: 2.0.3(supports-color@9.4.0)
       mdast-util-to-markdown: 2.1.2
     transitivePeerDependencies:
       - supports-color
 
-  mdast-util-gfm-task-list-item@2.0.0:
+  mdast-util-gfm-task-list-item@2.0.0(supports-color@9.4.0):
     dependencies:
       '@types/mdast': 4.0.4
       devlop: 1.1.0
-      mdast-util-from-markdown: 2.0.3
+      mdast-util-from-markdown: 2.0.3(supports-color@9.4.0)
       mdast-util-to-markdown: 2.1.2
     transitivePeerDependencies:
       - supports-color
 
-  mdast-util-gfm@3.1.0:
+  mdast-util-gfm@3.1.0(supports-color@9.4.0):
     dependencies:
-      mdast-util-from-markdown: 2.0.3
+      mdast-util-from-markdown: 2.0.3(supports-color@9.4.0)
       mdast-util-gfm-autolink-literal: 2.0.1
-      mdast-util-gfm-footnote: 2.1.0
-      mdast-util-gfm-strikethrough: 2.0.0
-      mdast-util-gfm-table: 2.0.0
-      mdast-util-gfm-task-list-item: 2.0.0
+      mdast-util-gfm-footnote: 2.1.0(supports-color@9.4.0)
+      mdast-util-gfm-strikethrough: 2.0.0(supports-color@9.4.0)
+      mdast-util-gfm-table: 2.0.0(supports-color@9.4.0)
+      mdast-util-gfm-task-list-item: 2.0.0(supports-color@9.4.0)
       mdast-util-to-markdown: 2.1.2
     transitivePeerDependencies:
       - supports-color
 
-  mdast-util-math@3.0.0:
+  mdast-util-math@3.0.0(supports-color@9.4.0):
     dependencies:
       '@types/hast': 3.0.5
       '@types/mdast': 4.0.4
       devlop: 1.1.0
       longest-streak: 3.1.0
-      mdast-util-from-markdown: 2.0.3
+      mdast-util-from-markdown: 2.0.3(supports-color@9.4.0)
       mdast-util-to-markdown: 2.1.2
       unist-util-remove-position: 5.0.0
     transitivePeerDependencies:
@@ -18473,10 +19181,10 @@ snapshots:
 
   micromark-util-types@2.0.2: {}
 
-  micromark@4.0.2:
+  micromark@4.0.2(supports-color@9.4.0):
     dependencies:
       '@types/debug': 4.1.13
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@9.4.0)
       decode-named-character-reference: 1.3.0
       devlop: 1.1.0
       micromark-core-commonmark: 2.0.3
@@ -19030,9 +19738,9 @@ snapshots:
       points-on-curve: 0.2.0
       points-on-path: 0.2.1
 
-  router@2.2.0:
+  router@2.2.0(supports-color@9.4.0):
     dependencies:
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@9.4.0)
       depd: 2.0.0
       is-promise: 4.0.0
       parseurl: 1.3.3
@@ -19074,9 +19782,9 @@ snapshots:
 
   semver@7.8.5: {}
 
-  send@1.2.1:
+  send@1.2.1(supports-color@9.4.0):
     dependencies:
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@9.4.0)
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
@@ -19090,12 +19798,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  serve-static@2.2.1:
+  serve-static@2.2.1(supports-color@9.4.0):
     dependencies:
       encodeurl: 2.0.0
       escape-html: 1.0.3
       parseurl: 1.3.3
-      send: 1.2.1
+      send: 1.2.1(supports-color@9.4.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -19460,9 +20168,9 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite-tsconfig-paths@6.1.1(typescript@6.0.3)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
+  vite-tsconfig-paths@6.1.1(supports-color@9.4.0)(typescript@6.0.3)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
     dependencies:
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@9.4.0)
       globrex: 0.1.2
       tsconfck: 3.1.6(typescript@6.0.3)
       vite: 8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
@@ -19505,21 +20213,6 @@ snapshots:
       tinyglobby: 0.2.17
     optionalDependencies:
       '@types/node': 22.20.0
-      esbuild: 0.28.1
-      fsevents: 2.3.3
-      jiti: 2.7.0
-      tsx: 4.22.4
-      yaml: 2.9.0
-
-  vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0):
-    dependencies:
-      lightningcss: 1.32.0
-      picomatch: 4.0.4
-      postcss: 8.5.15
-      rolldown: 1.0.3
-      tinyglobby: 0.2.17
-    optionalDependencies:
-      '@types/node': 26.1.2
       esbuild: 0.28.1
       fsevents: 2.3.3
       jiti: 2.7.0
@@ -19613,10 +20306,10 @@ snapshots:
     transitivePeerDependencies:
       - msw
 
-  vitest@4.1.8(@opentelemetry/api@1.9.0)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
+  vitest@4.1.8(@opentelemetry/api@1.9.0)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.8
-      '@vitest/mocker': 4.1.8(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+      '@vitest/mocker': 4.1.8(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
       '@vitest/pretty-format': 4.1.8
       '@vitest/runner': 4.1.8
       '@vitest/snapshot': 4.1.8
@@ -19633,7 +20326,7 @@ snapshots:
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
-      vite: 8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+      vite: 8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
@@ -19673,10 +20366,10 @@ snapshots:
     transitivePeerDependencies:
       - msw
 
-  vitest@4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
+  vitest@4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.8
-      '@vitest/mocker': 4.1.8(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+      '@vitest/mocker': 4.1.8(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
       '@vitest/pretty-format': 4.1.8
       '@vitest/runner': 4.1.8
       '@vitest/snapshot': 4.1.8
@@ -19693,7 +20386,7 @@ snapshots:
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
-      vite: 8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+      vite: 8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.1

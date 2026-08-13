@@ -5,6 +5,8 @@ packages:
   # its native build and publication scripts under native/landlock-run.
   - native/landlock-run
   - native/landlock-run/packages/*
+  # Dependency-only deploy root for the sealed Desktop SEA sidecar.
+  - native/desktop-runtime
   # Product assemblies over the package tier; apps/cli owns the `dsh` bin.
   - apps/*
   - website

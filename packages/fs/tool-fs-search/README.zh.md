@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-**面向模型的文件系统发现工具**（`glob`、`grep`）由 **打包的 ripgrep 二进制**（`@vscode/ripgrep`）支持，而不是由 `ctx.fs` 提供方方法或系统 `rg` 安装支持。注册是无条件的：二进制随 NPM 依赖一起交付，因此没有加载期可用性探针。每次调用都通过 `ctx.subprocess` seam 以固定 argv 向量 spawn 该二进制（前缀 `--no-config`，使宿主的 `RIPGREP_CONFIG_PATH` 无法向不受约束的 spawn 注入 `--pre` 预处理器；模型控制的值是普通 argv 元素——不存在 shell 层，因此不涉及 shell 引号处理），解析原始 `rg` 输出，并返回相对于工作目录的规范值。本包注入 `tools`、`systemPrompt` 和 `subprocess`，有意**不**注入 `fs`；格式化结果 spill 为可选功能，因此机会性读取 `ctx.spillStore`，调用方式为 `ctx.get()`。
+**面向模型的文件系统发现工具**（`glob`、`grep`）由解析出的 **ripgrep 可执行文件**支持，而不是由 `ctx.fs` 提供方方法或系统 `rg` 安装支持。普通 NPM 部署会延迟解析 `@vscode/ripgrep` 随附的二进制；虚拟载荷无法执行原生文件的封闭运行时则提供绝对 `ripgrepPath`，插件会在加载时校验它。每次调用都通过 `ctx.subprocess` seam 以固定 argv 向量 spawn 该可执行文件（前缀 `--no-config`，使宿主的 `RIPGREP_CONFIG_PATH` 无法向不受约束的 spawn 注入 `--pre` 预处理器；模型控制的值是普通 argv 元素——不存在 shell 层，因此不涉及 shell 引号处理），解析原始 `rg` 输出，并返回相对于工作目录的规范值。本包注入 `tools`、`systemPrompt` 和 `subprocess`，有意**不**注入 `fs`；格式化结果 spill 为可选功能，因此机会性读取 `ctx.spillStore`，调用方式为 `ctx.get()`。
 
 ```ts ignore-check
 // A deployment chooses how over-cap glob pages are selected.
@@ -14,9 +14,9 @@ await ctx.plugin(LocalSpillStore)                           // @deepseek-ai/dsh-
 
 采用 spawn 支持的原因：本地工作区发现天然是由进程支持的 `rg` 工作流；如果把搜索放到 `ctx.fs` 上，就会迫使每个文件系统后端扩展搜索 API。subprocess seam 负责 spawn 执行、进程树终止、环境清理和有界输出捕获；本包负责 schema、参数校验、argv 构造、解析、保留、格式化结果 spill 和超时声明。工具绝不暴露后台任务——只有在 `rg` 退出、被协作式超时终止、被中止或失败后，调用才会返回。
 
-## 部署要求：无需宿主 rg，但工作目录与文件系统需共置
+## 部署要求：自有 rg，且工作目录与文件系统需共置
 
-二进制随包交付，覆盖所有受支持平台（macOS/Linux/Windows，x64/arm64），因此无需宿主 `rg` 安装，工具在每个部署上都注册。返回路径会相对于解析后的工作目录显示（调用方 agent（智能体）有会话 cwd 时使用该 cwd，否则使用 `process.cwd()`）；只有该工作目录与文件系统根目录是同一工作区时，才能用 `read` 继续读取。这项共置要求不附带运行时跨服务校验；远程或虚拟文件系统搜索需等待共享工作区约定或特定提供方的搜索后端。
+NPM 默认二进制随包交付，覆盖所有受支持平台（macOS/Linux/Windows，x64/arm64）；封闭部署则负责 `ripgrepPath` 指向的可执行文件。两种模式都不会搜索 `PATH`，也不要求宿主安装 `rg`。返回路径会相对于解析后的工作目录显示（调用方 agent（智能体）有会话 cwd 时使用该 cwd，否则使用 `process.cwd()`）；只有该工作目录与文件系统根目录是同一工作区时，才能用 `read` 继续读取。这项共置要求不附带运行时跨服务校验；远程或虚拟文件系统搜索需等待共享工作区约定或特定提供方的搜索后端。
 
 ## 配置
 
@@ -25,6 +25,7 @@ await ctx.plugin(LocalSpillStore)                           // @deepseek-ai/dsh-
 | 配置键 | 默认值 | 含义 |
 |---|---|---|
 | `sampleOverCapGlobResults` | 无（必填） | `true` 会在顶层条目之间对超过上限的 `glob` 页面采样；`false` 保留按修改时间排序的前部。格式化 spill 成功时，两种模式都会在该产物中保留完整排序列表。 |
+| `ripgrepPath` | NPM 打包的可执行文件 | 部署自有可执行文件的绝对路径。配置后必须指向可执行的常规文件；无效值会在插件加载时被拒绝。 |
 | `globMaxResults` | `100` | 一次 `glob` 调用内联展示的最大路径数（与 Claude Code 的 `GlobTool` 上限相同）。未超过上限的结果保持完整，并按修改时间排序。 |
 | `grepMaxMatches` | `250` | 一次 `grep` 调用内联保留的最大平铺匹配数（与 Claude Code 的 `GrepTool` `head_limit` 相同）；后续匹配写入格式化 spill 产物。 |
 | `grepMaxLineBytes` | `2000` | 每条匹配行预览的字节上限；截断会保留 UTF-8 边界，并标记为 `(line truncated)`。 |
@@ -88,7 +89,7 @@ Use the grep tool — not shell grep or rg — to search file contents. Use read
 
 #### 模型看到的内容
 
-glob 描述声明了配置的超过上限排序方式。生成的 [`glob` 和 `grep` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-fs-search) 使用 `sampleOverCapGlobResults: true`；工具无条件注册。
+glob 描述声明了配置的超过上限排序方式。生成的 [`glob` 和 `grep` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-fs-search) 使用 `sampleOverCapGlobResults: true`；部署配置通过校验后，两个工具会一起注册。
 
 #### Token 影响
 
@@ -129,6 +130,6 @@ glob 描述声明了配置的超过上限排序方式。生成的 [`glob` 和 `g
 ## 已知限制与暂缓事项
 
 - **搜索与文件访问没有共享工作区证明**——只有当工作目录与文件系统根目录指向同一工作区时，返回路径才可继续读取；本包不执行运行时跨服务校验。
-- **打包二进制固定在依赖版本上**——`@vscode/ripgrep` 覆盖其随附的平台（macOS/Linux/Windows，x64/arm64）；不支持的平台或损坏的安装会以 `SEARCH_FAILED` 使调用失败。远程或虚拟文件系统需要共置的工作区或另一个搜索消费方。
+- **NPM 默认二进制固定在依赖版本上**——`@vscode/ripgrep` 覆盖其随附的平台（macOS/Linux/Windows，x64/arm64）；不支持的平台或损坏的安装会以 `SEARCH_FAILED` 使调用失败。封闭部署负责其 `ripgrepPath` 的更新与兼容性。远程或虚拟文件系统需要共置的工作区或另一个搜索消费方。
 - **schema 只暴露一个有界页面**——偏移分页、大小写开关、替代输出模式与提供方支撑的发现仍不在本包范围内；达到上限的完整输出需要 spill 后端。
 - **启用采样时仅按搜索根正下方的第一段路径分组**——超过上限的 `glob` 页面在这些顶层条目之间平衡，因此集中在更深处的结果（一棵均匀树里某个繁忙目录）在该层级之下仍会呈现不均；递归平衡被延期。

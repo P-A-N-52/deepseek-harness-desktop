@@ -48,4 +48,18 @@ describe('dsh-tool-fs-search real-load-path guard', () => {
     expect(ctx.tools.schemas().map(s => s.name)).toEqual(expect.arrayContaining(['glob', 'grep']))
     await fiber.dispose()
   })
+
+  it('rejects a relative deployment-supplied ripgrep path at load', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(LocalSubprocessRuntime)
+
+    const loader = Object.create(Loader.prototype) as Loader
+    const unwrapped = loader.unwrapExports(toolFsSearch) as Parameters<Context['plugin']>[0]
+    await expect(ctx.plugin(unwrapped, {
+      sampleOverCapGlobResults: true,
+      ripgrepPath: 'bin/rg',
+    })).rejects.toThrow('ripgrepPath must be a non-empty absolute path')
+  })
 })

@@ -1,0 +1,103 @@
+:root {
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f5f6f8;
+  color: #20242c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 15%, rgb(73 105 255 / 14%), transparent 34rem),
+    #f5f6f8;
+}
+
+.status {
+  width: min(28rem, calc(100vw - 3rem));
+  text-align: center;
+}
+
+.mark {
+  display: grid;
+  width: 3.25rem;
+  height: 3.25rem;
+  margin: 0 auto 1.4rem;
+  place-items: center;
+  border-radius: 1.1rem;
+  background: #315cec;
+  color: white;
+  font-size: 0.82rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  box-shadow: 0 0.8rem 2.5rem rgb(49 92 236 / 22%);
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 650;
+  letter-spacing: -0.018em;
+}
+
+p {
+  margin: 0.7rem auto 0;
+  color: #667085;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+.progress {
+  width: 9rem;
+  height: 0.2rem;
+  margin: 1.6rem auto 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(49 92 236 / 12%);
+}
+
+.progress span {
+  display: block;
+  width: 45%;
+  height: 100%;
+  border-radius: inherit;
+  background: #315cec;
+  animation: loading 1.25s ease-in-out infinite alternate;
+}
+
+.error .mark {
+  background: #c2413b;
+  box-shadow: 0 0.8rem 2.5rem rgb(194 65 59 / 18%);
+}
+
+@keyframes loading {
+  from { transform: translateX(-5%); }
+  to { transform: translateX(125%); }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    background: #111318;
+    color: #f1f3f7;
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 50% 15%, rgb(83 112 255 / 18%), transparent 34rem),
+      #111318;
+  }
+
+  p {
+    color: #9ca3af;
+  }
+}

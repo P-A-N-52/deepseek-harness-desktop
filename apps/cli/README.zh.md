@@ -38,6 +38,8 @@ profile 目录包含一个 `package.json`，其中记录树外插件依赖，以
 
 `dsh.profile.bundles` 中列出的组合包先从 dsh 安装目录解析（`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`、`@deepseek-ai/dsh-headless`），再从 profile 自身的 `node_modules` 解析；pnpm 会将树外插件安装到该目录。
 
+内部入口 `lib/packaged-desktop-bin.js` 是封闭运行时的例外：它始终在 `127.0.0.1` 的临时端口启动 `web` profile，从可执行文件 closure 解析所有 bare 插件，并且不会创建 profile 模块 fallback 软链。它是 Desktop sidecar 入口，而不是新增的公开 CLI 模式；用户 patch 可以配置 closure 已包含的插件，但不能通过安装新包扩展该 closure。原生 host 会在专属进程组中启动该入口。如果直属父进程消失，该入口会请求普通 profile teardown，并在 teardown 完成或达到时限后强制终止专属进程组。
+
 使用 `--dump-default-config` 和 `--dump-config` 可在不启动的情况下检查组合后的配置树。
 
 层的确切优先级、flag、关闭行为、部署默认值和源码执行方式，以 [CLI（命令行界面）行为参考](reference/README.md)为准。

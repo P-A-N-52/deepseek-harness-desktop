@@ -14,10 +14,12 @@
     "where.exe"
   ],
   "ignoreWorkspaces": [
+    "native/desktop-runtime",
     "vendor/*",
     "python/sdk-runtime"
   ],
   "ignoreDependencies": [
+    "@tauri-apps/cli",
     "@yarnpkg/cli-dist",
     "lightningcss"
   ],
@@ -728,6 +730,7 @@
     },
     "apps/cli": {
       "entry": [
+        "src/packaged-desktop-bin.ts",
         "tests/**/*.spec.ts",
         "tests/**/*.e2e.ts",
         "tests/**/*.snapshot.ts"

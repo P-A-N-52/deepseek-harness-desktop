@@ -8,6 +8,7 @@
 
 import { pathToFileURL } from 'node:url'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { parseEnv } from 'node:util'
 import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import * as yaml from 'js-yaml'
@@ -25,7 +26,19 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Harness-home path resolver available to Loader `!!js` config expressions. */
     dshHomePath?: typeof dshHomePath
+    /** Bare-module resolver anchored to the package tree selected by app boot. */
+    appModuleResolver: AppModuleResolver
   }
+}
+
+/** Bare-module resolution owned by the application deployment. */
+export interface AppModuleResolver {
+  /**
+   * Resolve one bare module or package subpath from the selected package tree.
+   * @param specifier - bare module or package subpath to resolve.
+   * @returns the absolute resolved filename.
+   */
+  resolve(specifier: string): string
 }
 
 export {
@@ -766,8 +779,17 @@ export async function boot(
   // so its failure is host setup, not the plugin tree.
   let stage = 'host preparation failed'
   try {
-    ctx.baseUrl = pathToFileURL(dirname(absoluteConfigPath)).href + '/'
+    // Root-tree entries created by a plugin (rather than read by Include) use
+    // this context directly. A sealed host must therefore own their bare
+    // package resolution too; Include still replaces its child context base
+    // with the config directory for relative entry names.
+    const moduleBaseUrl = bareModuleBaseUrl ?? pathToFileURL(dirname(absoluteConfigPath)).href + '/'
+    const appRequire = createRequire(moduleBaseUrl)
+    ctx.baseUrl = moduleBaseUrl
     ctx.provide('dshHomePath', dshHomePath)
+    ctx.provide('appModuleResolver', {
+      resolve: specifier => appRequire.resolve(specifier),
+    })
     await ctx.plugin(Loader)
     await prepare?.(ctx)
     stage = 'plugin tree failed to load'

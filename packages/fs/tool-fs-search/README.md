@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-The **model-facing filesystem discovery tools**—`glob`, `grep`—are backed by the **packaged ripgrep binary** (`@vscode/ripgrep`), not by `ctx.fs` provider methods and not by a system `rg` install. Registration is unconditional: the binary ships inside the npm dependency, so there is no load-time availability probe. Each call spawns the binary through the `ctx.subprocess` seam with a fixed argv vector (`--no-config` prepended so a host `RIPGREP_CONFIG_PATH` cannot inject a `--pre` preprocessor into the unconfined spawn; model-controlled values are plain argv elements — no shell layer exists, so no quoting applies), parses the raw `rg` output, and returns a workdir-relative canonical value. The package injects `tools`, `systemPrompt`, and `subprocess`—deliberately **not** `fs`; `ctx.spillStore` is read opportunistically with `ctx.get()` because formatted-result spill is optional.
+The **model-facing filesystem discovery tools**—`glob`, `grep`—are backed by a resolved **ripgrep executable**, not by `ctx.fs` provider methods and not by a system `rg` install. Ordinary npm deployments lazily resolve the binary shipped by `@vscode/ripgrep`; sealed runtimes whose virtual payload cannot execute native files supply an absolute `ripgrepPath`, which is validated when the plugin loads. Each call spawns that executable through the `ctx.subprocess` seam with a fixed argv vector (`--no-config` prepended so a host `RIPGREP_CONFIG_PATH` cannot inject a `--pre` preprocessor into the unconfined spawn; model-controlled values are plain argv elements — no shell layer exists, so no quoting applies), parses the raw `rg` output, and returns a workdir-relative canonical value. The package injects `tools`, `systemPrompt`, and `subprocess`—deliberately **not** `fs`; `ctx.spillStore` is read opportunistically with `ctx.get()` because formatted-result spill is optional.
 
 ```ts ignore-check
 // A deployment chooses how over-cap glob pages are selected.
@@ -14,9 +14,9 @@ await ctx.plugin(LocalSpillStore)                           // @deepseek-ai/dsh-
 
 Why spawn-backed: local workspace discovery is naturally a process-backed `rg` workflow, and putting search on `ctx.fs` would force every filesystem backend to grow a search API. The subprocess seam owns spawn execution, process-tree termination, environment scrubbing, and bounded output capture; this package owns schemas, argument validation, argv construction, parsing, retention, formatted-result spill, and timeout declaration. The tools never expose a background job — the call returns only after `rg` exits, is terminated by the cooperative timeout, is aborted, or fails.
 
-## Deployment requirement: no host rg, co-located workdir/filesystem
+## Deployment requirement: owned rg, co-located workdir/filesystem
 
-The binary ships with the package on every supported platform (macOS/Linux/Windows, x64/arm64), so no host `rg` install is required and the tools register on every deployment. Returned paths are displayed relative to the resolved workdir (the calling agent's session cwd when present, else `process.cwd()`) and are follow-up-readable with `read` only when that workdir and the filesystem root are the same workspace. That co-location requirement carries no runtime cross-service validation; remote or virtual filesystem search waits for a shared workspace contract or a provider-specific search backend.
+The npm default ships with the package on every supported platform (macOS/Linux/Windows, x64/arm64); a sealed deployment instead owns the executable named by `ripgrepPath`. Neither mode searches `PATH` or requires a host `rg` install. Returned paths are displayed relative to the resolved workdir (the calling agent's session cwd when present, else `process.cwd()`) and are follow-up-readable with `read` only when that workdir and the filesystem root are the same workspace. That co-location requirement carries no runtime cross-service validation; remote or virtual filesystem search waits for a shared workspace contract or a provider-specific search backend.
 
 ## Config
 
@@ -25,6 +25,7 @@ The binary ships with the package on every supported platform (macOS/Linux/Windo
 | Key | Default | Meaning |
 |---|---|---|
 | `sampleOverCapGlobResults` | none (required) | `true` samples an over-cap `glob` page across top-level entries; `false` keeps the modification-time-ordered head. When formatted spill succeeds, both modes preserve the complete sorted list in that artifact. |
+| `ripgrepPath` | npm-packaged executable | Absolute deployment-owned executable path. A configured path must name an executable regular file and is rejected at plugin load when invalid. |
 | `globMaxResults` | `100` | Max paths one `glob` call shows inline (matches Claude Code's `GlobTool` limit). A result within the cap remains complete and modification-time ordered. |
 | `grepMaxMatches` | `250` | Max flat matches one `grep` call retains inline (matches Claude Code's `GrepTool` `head_limit`); later matches go to the formatted spill artifact. |
 | `grepMaxLineBytes` | `2000` | Byte cap per matched-line preview; the cut preserves UTF-8 boundaries and is marked `(line truncated)`. |
@@ -88,7 +89,7 @@ Prefix-stable while the plugin scope, sampling choice, and guidance text are unc
 
 #### What the model sees
 
-The glob description states the configured over-cap ordering. The generated [`glob` and `grep` schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-fs-search) use `sampleOverCapGlobResults: true`; the tools are registered unconditionally.
+The glob description states the configured over-cap ordering. The generated [`glob` and `grep` schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-fs-search) use `sampleOverCapGlobResults: true`; both tools register together after deployment config validation.
 
 #### Token effect
 
@@ -129,6 +130,6 @@ Append-only; newly visible content follows the reusable request prefix and does 
 ## Known Limitations and Deferred Work
 
 - **Search and file access have no shared-workspace proof** — returned paths are follow-up-readable only when the workdir and filesystem root denote the same workspace; the package performs no runtime cross-service validation.
-- **The packaged binary is fixed at dependency version** — `@vscode/ripgrep` covers the platforms it ships (macOS/Linux/Windows, x64/arm64); an unsupported platform or a corrupted install fails calls with `SEARCH_FAILED`. Remote or virtual filesystems need a co-located workspace or another search consumer.
+- **The npm default is fixed at dependency version** — `@vscode/ripgrep` covers the platforms it ships (macOS/Linux/Windows, x64/arm64); an unsupported platform or a corrupted install fails calls with `SEARCH_FAILED`. A sealed deployment owns updates and compatibility for its configured `ripgrepPath`. Remote or virtual filesystems need a co-located workspace or another search consumer.
 - **The schemas expose one bounded page** — offset pagination, case-mode switches, alternate output modes, and provider-backed discovery remain outside this package; capped complete output requires a spill backend.
 - **Sampling, when enabled, groups by first path segment beneath the search root only** — an over-cap `glob` page balances across those top-level entries, so a result concentrated deeper (one busy directory inside an otherwise even tree) is still shown unevenly below that level; recursive balancing is deferred.

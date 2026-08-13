@@ -2405,6 +2405,8 @@ Requires: `tools` · `systemPrompt` · `subprocess`
 export interface Config {
   /** Whether an over-cap `glob` page is sampled across top-level entries instead of taking the modification-time head. */
   sampleOverCapGlobResults: boolean
+  /** Absolute deployment-supplied ripgrep executable; omitted for the npm-packaged platform binary. */
+  ripgrepPath?: string
   /** Max paths one `glob` call retains inline; later paths go to the formatted spill file. */
   globMaxResults?: number
   /** Max flat matches one `grep` call retains inline; later matches go to the formatted spill file. */
@@ -2427,7 +2429,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/fs/tool-fs-search/src/index.ts:73`](../packages/fs/tool-fs-search/src/index.ts)
+Source: [`packages/fs/tool-fs-search/src/index.ts:76`](../packages/fs/tool-fs-search/src/index.ts)
 
 <a id="deepseek-aidsh-tool-goal"></a>
 
@@ -3029,7 +3031,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-api-gateway` — requires `typert` ([`packages/api/gateway/src/index.ts`](../packages/api/gateway/src/index.ts))
 - `@deepseek-ai/dsh-api-remotes` ([`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts))
 - `@deepseek-ai/dsh-client-locale` ([`packages/client/locale/src/index.ts`](../packages/client/locale/src/index.ts))
-- `@deepseek-ai/dsh-client-modules` — requires `webServer` · `loader` ([`packages/client/modules/src/index.ts`](../packages/client/modules/src/index.ts))
+- `@deepseek-ai/dsh-client-modules` — requires `webServer` · `loader` · `appModuleResolver` ([`packages/client/modules/src/index.ts`](../packages/client/modules/src/index.ts))
 - `@deepseek-ai/dsh-client-runtime` ([`packages/client/runtime/src/index.ts`](../packages/client/runtime/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-agent-preset` ([`packages/client/ui-agent-preset/src/index.ts`](../packages/client/ui-agent-preset/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-commands` ([`packages/client/ui-commands/src/index.ts`](../packages/client/ui-commands/src/index.ts))

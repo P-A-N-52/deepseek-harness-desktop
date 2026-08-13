@@ -61,6 +61,7 @@
   name: '@deepseek-ai/dsh-tool-fs-search'
   config:
     sampleOverCapGlobResults: false
+    ripgrepPath: !!js process.env.DSH_RIPGREP_PATH
 
 # ── background jobs ────────────────────────────────────────────────────────
 

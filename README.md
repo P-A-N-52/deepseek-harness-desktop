@@ -1,6 +1,23 @@
-# DeepSeek Harness
+# DeepSeek Harness Desktop
 
 English | [中文](README.zh.md)
+
+DeepSeek Harness Desktop is an experimental macOS Tauri distribution of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). The native host supervises a sealed `dsh web` sidecar on an ephemeral IPv4 loopback port and loads the existing Harness Web UI directly; it does not fork the UI or introduce another API protocol.
+
+This repository temporarily carries the complete Harness monorepo because the sealed runtime still depends on internal boot, client-module, CLI lifecycle, and filesystem-search changes. The upstream Git history is preserved, and the official repository is configured as the read-only `upstream` remote.
+
+## Desktop status
+
+The first-day implementation targets Apple Silicon macOS. Local builds are ad-hoc signed `.app` bundles; Developer ID signing, notarization, DMG packaging, automatic updates, Intel builds, and other operating systems remain future release work.
+
+```sh
+pnpm install
+pnpm run desktop:build
+```
+
+The application is produced at `apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness.app`. See the Desktop guide ([English](apps/desktop/README.md) | [中文](apps/desktop/README.zh.md)) for its runtime, data, security, and lifecycle behavior.
+
+## Upstream project
 
 DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
 

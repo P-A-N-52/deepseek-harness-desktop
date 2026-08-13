@@ -20,6 +20,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
+import { rgPath } from '@vscode/ripgrep'
 
 const testToolSignal = new AbortController().signal
 
@@ -64,7 +65,7 @@ describe('search tools over the real subprocess service + the packaged rg', () =
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(LocalSubprocessRuntime)
-    await ctx.plugin(ToolFsSearch, { sampleOverCapGlobResults: true })
+    await ctx.plugin(ToolFsSearch, { sampleOverCapGlobResults: true, ripgrepPath: rgPath })
   })
 
   afterEach(async () => {

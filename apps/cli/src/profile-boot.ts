@@ -14,7 +14,7 @@
 import { writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { FiberState, type Context } from '@deepseek-ai/cordis'
+import type { Context, FiberState } from '@deepseek-ai/cordis'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import {
@@ -39,6 +39,9 @@ import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 import { createProcessShutdown, type ProcessShutdown } from './process-shutdown.ts'
 
 const NAME = 'dsh'
+
+/** Runtime mirror of the active member from Cordis's cross-package const enum. */
+const FIBER_ACTIVE = 2 as FiberState.ACTIVE
 
 /**
  * The home-level user patch layer (`$DSH_HOME/cordis.patch.yml`), applied
@@ -93,10 +96,13 @@ export function resolveTelemetryPatch(disabledEnv: string | undefined, hasRow: b
  * on the same file, so both compose over the identical base).
  * @param name - the profile name.
  * @param userLayer - `false` skips parsing `cordis.patch.yml` (the default dump).
+ * @param bareModuleBaseUrl - closed-runtime module base; when present, the
+ *   Loader resolves bare plugins from that immutable closure instead of a
+ *   profile-directory fallback symlink.
  * @returns the loaded profile.
  */
-export function prepareProfile(name: string, userLayer = true): Profile {
-  healProfilesModuleFallback(INSTALL_ANCHOR)
+export function prepareProfile(name: string, userLayer = true, bareModuleBaseUrl?: string): Profile {
+  if (bareModuleBaseUrl === undefined) healProfilesModuleFallback(INSTALL_ANCHOR)
   const profile = loadProfile(NAME, name, INSTALL_ANCHOR, undefined, { userLayer })
   writeFileSync(join(profile.dir, PROFILE_ROOT_FILENAME), PROFILE_ROOT_CONFIG)
   return profile
@@ -142,8 +148,9 @@ function allPatches(composed: ComposedProfile): PatchOptions[] {
 function composeProfile(
   name: string,
   patchFiles: readonly string[],
+  bareModuleBaseUrl?: string,
 ): ComposedProfile {
-  const profile = prepareProfile(name)
+  const profile = prepareProfile(name, true, bareModuleBaseUrl)
   const homePatches = loadOptionalPatches(NAME, homePatchPath()) ?? []
   const overlays = patchFiles.flatMap(file => loadOverlayPatches(NAME, resolve(file)))
   const bundlePatches = profile.layers.flatMap(layer => layer.patches)
@@ -180,6 +187,16 @@ export interface RunProfileOptions {
   patchFiles: readonly string[]
   /** The invocation's inner arguments, handed to the tree through `ctx.cmdlineArgs`. */
   args: readonly string[]
+  /**
+   * Installed-runtime base for a sealed executable closure. When present,
+   * bare plugins resolve there and no profile module-fallback symlink is
+   * created; omit it for the ordinary extensible CLI installation.
+   */
+  bareModuleBaseUrl?: string
+  /** Supervisor-loss signal for a sealed host that owns this process. */
+  supervisorSignal?: AbortSignal
+  /** Immediate exit action after signal disposal or its timeout. */
+  forceExit?: (code: number) => void
 }
 
 /**
@@ -194,7 +211,7 @@ export interface RunProfileOptions {
  */
 function suppressShutdownError(ctx: Context, signal: AbortSignal, error: unknown): void {
   if (signal.aborted) return
-  if (ctx.fiber.state !== FiberState.ACTIVE || ctx.get('loader') === undefined) return
+  if (ctx.fiber.state !== FIBER_ACTIVE || ctx.get('loader') === undefined) return
   throw error
 }
 
@@ -205,9 +222,11 @@ function suppressShutdownError(ctx: Context, signal: AbortSignal, error: unknown
  * @returns the settled root context and the shutdown controller.
  */
 export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Context; shutdown: ProcessShutdown }> {
-  const composed = composeProfile(options.profile, options.patchFiles)
   const app: { current?: Context } = {}
-  const shutdown = createProcessShutdown(async () => { await app.current?.fiber.dispose() })
+  const shutdown = createProcessShutdown(
+    async () => { await app.current?.fiber.dispose() },
+    options.forceExit,
+  )
   const signalShutdown = new AbortController()
   const interrupt = (code: number): void => {
     signalShutdown.abort()
@@ -220,9 +239,19 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // complete; SIGINT is a user interrupt and reports 130.
   process.on('SIGTERM', () => { interrupt(0) })
   process.on('SIGINT', () => { interrupt(130) })
+  let supervisorInterrupted = false
+  const supervisorInterrupt = (): void => {
+    if (supervisorInterrupted) return
+    supervisorInterrupted = true
+    interrupt(0)
+  }
+  options.supervisorSignal?.addEventListener('abort', supervisorInterrupt, { once: true })
+  if (options.supervisorSignal?.aborted === true) supervisorInterrupt()
   installFailLoud(NAME, process, async () => {
     await app.current?.fiber.dispose()
   })
+
+  const composed = composeProfile(options.profile, options.patchFiles, options.bareModuleBaseUrl)
 
   const rootConfig = join(composed.profile.dir, PROFILE_ROOT_FILENAME)
   // Recomposition for the live user layers: bundle layers below, overlays
@@ -256,7 +285,7 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
       args: options.args,
       exit: code => void shutdown.shutdown(code),
     })
-  })
+  }, options.bareModuleBaseUrl)
   app.current = ctx
   // A surface can dispose the whole tree while boot or this post-boot watcher
   // setup is still in flight — a signal, or a fast one-shot's appExit. Loader
@@ -266,7 +295,7 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // through its bounded shutdown, which disposes the watchers before the
   // loop drains.
   if (!signalShutdown.signal.aborted
-    && ctx.fiber.state === FiberState.ACTIVE
+    && ctx.fiber.state === FIBER_ACTIVE
     && ctx.get('loader') !== undefined) {
     try {
       // Config-only HMR for the live profile patch layer: the web bundle

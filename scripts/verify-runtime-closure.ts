@@ -1,10 +1,11 @@
 /**
- * Verify that the executable deploy manifest supplies every required workspace
- * peer in its dependency graph. With auto peer installation disabled, a missing
- * root peer can otherwise fail only when Cordis loads the packaged plugin.
+ * Verify that an executable deploy manifest supplies every required workspace
+ * peer in its dependency graph. A flat runtime additionally declares every
+ * reachable workspace package at the root, so one sealed bare-module base can
+ * resolve the complete graph after deployment.
  */
 import { globSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 
@@ -24,8 +25,15 @@ interface WorkspacePackage {
 const root = resolve(import.meta.dirname, '..')
 const { values } = parseArgs({
   args: process.argv.slice(2),
-  options: { manifest: { type: 'string' } },
+  options: {
+    flat: { type: 'boolean' },
+    manifest: { type: 'string' },
+    write: { type: 'boolean' },
+  },
 })
+if (values.write === true && values.flat !== true) {
+  throw new Error('verify-runtime-closure: --write requires --flat')
+}
 const runtimeManifestPath = resolve(root, values.manifest ?? 'python/sdk-runtime/package.json')
 const runtimeManifest = await loadManifest(runtimeManifestPath)
 const runtimeName = runtimeManifest.name ?? 'python/sdk-runtime'
@@ -65,15 +73,34 @@ for (let index = 0; index < queue.length; index += 1) {
 }
 
 if (failures.length > 0) {
-  console.error('verify-runtime-closure: required workspace peers are missing from python/sdk-runtime dependencies:')
+  console.error(`verify-runtime-closure: required workspace peers are missing from ${runtimeName} dependencies:`)
   for (const failure of failures) console.error(`  ${failure}`)
   process.exit(1)
+}
+
+if (values.flat === true) {
+  const missing = [...parents.keys()]
+    .filter(packageName => runtimeDependencies[packageName]?.startsWith('workspace:') !== true)
+    .sort()
+  if (missing.length > 0 && values.write !== true) {
+    console.error(`verify-runtime-closure: ${runtimeName} must flatten ${missing.length} reachable workspace package(s):`)
+    for (const packageName of missing) console.error(`  ${packageName}`)
+    process.exit(1)
+  }
+  if (missing.length > 0) {
+    runtimeManifest.dependencies = Object.fromEntries(Object.entries({
+      ...runtimeDependencies,
+      ...Object.fromEntries(missing.map(packageName => [packageName, 'workspace:^'])),
+    }).sort(([left], [right]) => left.localeCompare(right)))
+    await writeFile(runtimeManifestPath, `${JSON.stringify(runtimeManifest, null, 2)}\n`)
+    console.log(`verify-runtime-closure: flattened ${missing.length} workspace package(s) into ${runtimeName}.`)
+  }
 }
 
 console.log(`verify-runtime-closure: ${queue.length} workspace packages form a closed runtime dependency graph.`)
 
 async function loadWorkspacePackages(): Promise<Map<string, WorkspacePackage>> {
-  const paths = globSync(['packages/*/*/package.json', 'vendor/*/package.json'], { cwd: root })
+  const paths = globSync(['apps/*/package.json', 'packages/*/*/package.json', 'vendor/*/package.json'], { cwd: root })
     .sort()
     .map(relative => resolve(root, relative))
   const result = new Map<string, WorkspacePackage>()
