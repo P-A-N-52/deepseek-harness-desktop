@@ -9,18 +9,30 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
 import { describe, expect, it, vi } from 'vitest'
 
-async function bootHmr(dir: string, root: string[] = [], usePolling?: boolean): Promise<Context> {
+interface HmrTestOptions {
+  interval?: number
+  usePolling?: boolean
+}
+
+async function bootHmr(dir: string, root: string[] = [], options: HmrTestOptions = {}): Promise<Context> {
   const ctx = new Context()
   ctx.baseUrl = pathToFileURL(dir).href + '/'
-  await ctx.plugin(Loader)
-  await ctx.plugin(Timer)
-  await ctx.plugin(Hmr, {
-    root,
-    ignored: [],
-    debounce: 0,
-    ...usePolling === undefined ? {} : { usePolling },
-  })
-  return ctx
+  const { interval = 100, usePolling } = options
+  try {
+    await ctx.plugin(Loader)
+    await ctx.plugin(Timer)
+    await ctx.plugin(Hmr, {
+      root,
+      ignored: [],
+      debounce: 0,
+      interval,
+      ...usePolling === undefined ? {} : { usePolling },
+    })
+    return ctx
+  } catch (error) {
+    await ctx.fiber.dispose()
+    throw error
+  }
 }
 
 async function eventually(test: () => boolean, message: string): Promise<void> {
@@ -40,7 +52,7 @@ describe('HMR exact config paths', () => {
     writeFileSync(aliasFilename, 'export const generation = 0\n')
     // This acceptance owns alias-to-cache identity. Other cases below exercise
     // native events; polling keeps Windows fs.watch queue pressure out of it.
-    const ctx = await bootHmr(alias, ['.'], true)
+    const ctx = await bootHmr(alias, ['.'], { usePolling: true })
     const filename = join(await realpath(target), 'module.ts')
     const expected = pathToFileURL(filename).href
     const cacheHas = vi.spyOn(ctx.loader.internal!.loadCache, 'has').mockReturnValue(false)
@@ -61,6 +73,7 @@ describe('HMR exact config paths', () => {
       }
       expect(cacheHas).toHaveBeenCalledWith(expected)
     } finally {
+      cacheHas.mockRestore()
       await ctx.fiber.dispose()
       unlinkSync(alias)
       rmSync(target, { recursive: true, force: true })
@@ -104,26 +117,67 @@ describe('HMR exact config paths', () => {
       await eventually(() => observed.includes('two'), 'HMR did not observe config change')
       unlinkSync(filename)
       await eventually(() => observed.includes('missing'), 'HMR did not observe config removal')
+      writeFileSync(filename, 'three')
+      await eventually(() => observed.includes('three'), 'HMR did not observe config recreation')
     } finally {
       await ctx.fiber.dispose()
+      rmSync(dir, { recursive: true, force: true })
     }
   })
 
-  it('observes creation when the config parent did not exist at registration', { timeout: 20_000 }, async () => {
+  it('observes a burst of exact creations under parents missing at registration', { timeout: 20_000 }, async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-hmr-config-'))
-    const dir = join(root, 'later')
-    const filename = join(dir, 'plugins.yml')
-    const ctx = await bootHmr(root)
-    const observed: string[] = []
+    const targets = Array.from({ length: 20 }, (_, index) => ({
+      dir: join(root, `later-${String(index)}`, 'nested'),
+      filename: join(root, `later-${String(index)}`, 'nested', 'plugins.yml'),
+      content: `created-${String(index)}`,
+    }))
+    const ctx = await bootHmr(root, [], { interval: 10 })
+    const observed = new Set<string>()
+    let failures = 0
     try {
-      await ctx.hmr.registerConfig(filename, () => {
-        observed.push(readFileSync(filename, 'utf8'))
-      })
-      mkdirSync(dir)
-      writeFileSync(filename, 'created')
-      await eventually(() => observed.includes('created'), 'HMR did not observe config creation under a new parent')
+      ctx.on('hmr/config-update-failed', () => { failures += 1 })
+      await Promise.all(targets.map(target => ctx.hmr.registerConfig(target.filename, () => {
+        observed.add(readFileSync(target.filename, 'utf8'))
+      })))
+      expect(failures, 'missing paths are an idle initial state, not a failed refresh').toBe(0)
+      for (const target of targets) {
+        mkdirSync(target.dir, { recursive: true })
+        writeFileSync(target.filename, target.content)
+      }
+      await eventually(
+        () => targets.every(target => observed.has(target.content)),
+        `HMR missed exact creations under new parents: ${JSON.stringify([...observed])}`,
+      )
     } finally {
       await ctx.fiber.dispose()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('stops an exact watch before its registration disposer resolves', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-hmr-config-'))
+    const filename = join(dir, 'plugins.yml')
+    const ctx = await bootHmr(dir, [], { interval: 10 })
+    let refreshes = 0
+    try {
+      const dispose = await ctx.hmr.registerConfig(filename, () => { refreshes += 1 })
+      await dispose()
+      writeFileSync(filename, 'after-dispose')
+      await new Promise(resolve => setTimeout(resolve, 100))
+      expect(refreshes).toBe(0)
+    } finally {
+      await ctx.fiber.dispose()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a zero exact-watch interval at plugin load', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-hmr-config-'))
+    try {
+      await expect(bootHmr(dir, [], { interval: 0 })).rejects.toThrow('expected number >= 1')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
     }
   })
 
@@ -150,8 +204,8 @@ describe('HMR exact config paths', () => {
       })
       await started.promise
       writeFileSync(filename, 'two')
-      // Chokidar coalesces atomic writes for 100 ms by default. Wait beyond
-      // that window so this edit is queued before registration disposal.
+      // Wait beyond the exact-watch interval so this edit is queued before
+      // registration disposal.
       await new Promise(resolve => setTimeout(resolve, 250))
 
       let disposed = false
@@ -165,6 +219,7 @@ describe('HMR exact config paths', () => {
     } finally {
       release.resolve(undefined)
       await ctx.fiber.dispose()
+      rmSync(dir, { recursive: true, force: true })
     }
   })
 
@@ -190,13 +245,14 @@ describe('HMR exact config paths', () => {
       expect(observed.error).toBeInstanceOf(Error)
       expect(observed.error.message).toBe('42')
 
-      // Let Chokidar's atomic-write window close before requiring a distinct
+      // Let the exact watcher take another sample before requiring a distinct
       // second notification from the same path.
       await new Promise(resolve => setTimeout(resolve, 250))
       writeFileSync(filename, 'invalid again')
       await eventually(() => failureCount === 2, 'HMR stopped broadcasting after an observer rejected')
     } finally {
       await ctx.fiber.dispose()
+      rmSync(dir, { recursive: true, force: true })
     }
   })
 })

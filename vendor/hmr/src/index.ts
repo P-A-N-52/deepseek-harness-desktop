@@ -3,6 +3,7 @@ import type { Dict } from '@deepseek-ai/cosmokit'
 import { ModuleLoader, type ModuleJob, type ResolveResult } from '@deepseek-ai/cordis-plugin-loader'
 import type { Include } from '@deepseek-ai/cordis-plugin-include'
 import { FSWatcher, watch, type ChokidarOptions } from 'chokidar'
+import { unwatchFile, watchFile, type Stats } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
 import { handleError } from './error.ts'
@@ -58,27 +59,21 @@ interface ConfigRefresh {
 }
 
 interface ConfigRegistration {
-  watcher: FSWatcher
+  close(): Promise<void>
 }
 
-async function findWatchRoot(filename: string): Promise<{ filename: string; root: string; depth: number }> {
+async function resolveWatchFilename(filename: string): Promise<string> {
   let root = dirname(filename)
-  let depth = 0
   while (true) {
     try {
       if (!(await stat(root)).isDirectory()) throw new Error(`config watch parent is not a directory: ${root}`)
       const canonicalRoot = await realpath(root)
-      return {
-        filename: resolve(canonicalRoot, relative(root, filename)),
-        root: canonicalRoot,
-        depth,
-      }
+      return resolve(canonicalRoot, relative(root, filename))
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
       const parent = dirname(root)
       if (parent === root) throw error
       root = parent
-      depth += 1
     }
   }
 }
@@ -125,63 +120,57 @@ class Hmr extends Service {
   }
 
   /**
-   * Watch one exact config path outside the configured module roots.
+   * Poll one exact config path outside the configured module roots.
    * @param filename - Config path, resolved against the HMR base directory.
    * @param refresh - Refresh callback run serially on add, change, or unlink.
-   * @returns an asynchronous disposer once the exact watch is ready.
+   * @returns an asynchronous disposer after the initial file state is reconciled.
    * @throws when HMR is inactive, the path is already registered, or watcher startup fails.
    */
   async registerConfig(filename: string, refresh: () => Promise<void> | void): Promise<() => Promise<void>> {
     if (!this.watcher) throw new Error('HMR is not active')
     filename = resolve(this.baseDir, filename)
-    const target = await findWatchRoot(filename)
-    const watchFilename = target.filename
+    const watchFilename = await resolveWatchFilename(filename)
     if (this.configs.has(watchFilename)) throw new Error(`config path already registered: ${filename}`)
 
-    const { root, depth } = target
-    const watcher = watch(root, {
-      ...this.config,
-      cwd: undefined,
-      depth,
-      ignored: undefined,
-      ignoreInitial: false,
-    })
-    const registration = { watcher }
-    this.configs.set(watchFilename, registration)
-    const onChange = (path: string) => {
-      const observed = resolve(path)
-      if (observed !== filename && observed !== watchFilename) return
+    let active = true
+    let initialReconcile = Promise.resolve()
+    let closing: Promise<void> | undefined
+    const onChange = (current: Stats, previous: Stats) => {
+      if (!active || (current.nlink === 0 && previous.nlink === 0)) return
       this.refreshConfig(registration, filename, refresh)
     }
-    watcher.on('add', onChange)
-    watcher.on('change', onChange)
-    watcher.on('unlink', onChange)
-
-    const ready = Promise.withResolvers<void>()
-    let readyState: 'pending' | 'resolved' | 'rejected' = 'pending'
-    watcher.once('ready', () => {
-      readyState = 'resolved'
-      ready.resolve()
-    })
-    watcher.on('error', (error) => {
-      if (readyState === 'pending') {
-        readyState = 'rejected'
-        ready.reject(error)
-      } else {
-        this.ctx.logger.warn(error)
-      }
-    })
+    const registration: ConfigRegistration = {
+      close: () => closing ??= (async () => {
+        active = false
+        unwatchFile(watchFilename, onChange)
+        await Promise.allSettled([initialReconcile])
+        await this.configRefreshes.get(registration)?.running
+      })(),
+    }
+    this.configs.set(watchFilename, registration)
 
     try {
-      await ready.promise
+      watchFile(watchFilename, {
+        persistent: this.config.persistent ?? true,
+        interval: this.config.interval,
+      }, onChange)
+      initialReconcile = (async () => {
+        try {
+          await stat(watchFilename)
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+          throw error
+        }
+        if (active) this.refreshConfig(registration, filename, refresh)
+      })()
+      await initialReconcile
       return this.ctx.effect(() => async () => {
         if (this.configs.get(watchFilename) === registration) this.configs.delete(watchFilename)
-        await watcher.close()
-        await this.configRefreshes.get(registration)?.running
+        await registration.close()
       }, 'hmr.registerConfig()')
     } catch (error) {
       this.configs.delete(watchFilename)
-      await watcher.close()
+      await registration.close()
       throw error
     }
   }
@@ -198,10 +187,11 @@ class Hmr extends Service {
 
   async* [Service.init]() {
     yield async () => {
-      await this.watcher?.close()
-      await Promise.allSettled([...this.configs.values()].map(registration => registration.watcher.close()))
+      const configClosures = [...this.configs.values()].map(registration => registration.close())
       this.configs.clear()
+      const [watcherResult] = await Promise.allSettled([this.watcher?.close(), ...configClosures])
       await Promise.allSettled([...this.refreshTasks])
+      if (watcherResult?.status === 'rejected') throw watcherResult.reason
     }
 
     const { loader } = this.ctx
@@ -554,6 +544,7 @@ namespace Hmr {
     base?: string
     root: string[]
     debounce: number
+    interval: number
     ignored: string[]
   }
 
@@ -567,6 +558,7 @@ namespace Hmr {
       'data',
     ]),
     debounce: z.natural().role('ms').default(100),
+    interval: z.natural().min(1).role('ms').default(100),
   })
   // [deepseek-harness] vendored modification: removed `.i18n({ 'en-US': enUS, 'zh-CN': zhCN })`
   // and the corresponding `./locales/*.yml` imports, to avoid a runtime YAML import hook

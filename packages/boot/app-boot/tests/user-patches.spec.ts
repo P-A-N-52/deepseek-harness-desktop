@@ -22,8 +22,15 @@ import {
 } from '../src/index.ts'
 
 const NAME = 'dsh-test-bin'
+const EXACT_WATCH_INTERVAL_MS = 10
 
 const tmp = (): string => mkdtempSync(join(tmpdir(), 'dsh-user-patches-'))
+const exactHmrConfig = () => ({
+  root: [],
+  ignored: [],
+  debounce: 0,
+  interval: EXACT_WATCH_INTERVAL_MS,
+})
 
 async function eventually(test: () => boolean, message: string): Promise<void> {
   const deadline = Date.now() + 10_000
@@ -33,7 +40,7 @@ async function eventually(test: () => boolean, message: string): Promise<void> {
   }
 }
 
-const settleChokidarChangeThrottle = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 75))
+const settleExactWatchSample = (): Promise<void> => new Promise(resolve => setTimeout(resolve, EXACT_WATCH_INTERVAL_MS * 2))
 
 describe('loadOptionalPatches', () => {
   afterEach(() => {
@@ -319,7 +326,7 @@ describe('boot with user patches', () => {
     const basePatches = [{ id: 'noop', config: { value: 'generated' } }]
     const ctx = await boot(NAME, writeTree(dir), basePatches)
     await ctx.plugin(Timer)
-    await ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
+    await ctx.plugin(Hmr, exactHmrConfig())
     const failures: Array<{ filename: string; error: Error }> = []
     ctx.on('hmr/config-update-failed', (failedFilename, error) => {
       failures.push({ filename: failedFilename, error })
@@ -338,22 +345,22 @@ describe('boot with user patches', () => {
       expect(failures[0]).toMatchObject({ filename })
       expect(failures[0]?.error).toBeInstanceOf(Error)
       expect((entryConfig(ctx, 'noop') as { value?: string }).value).toBe('live')
-      await settleChokidarChangeThrottle()
+      await settleExactWatchSample()
 
       writeFileSync(filename, 'invalid: [unclosed\n')
       await eventually(() => failures.length === 2, 'parse failure was not broadcast')
       expect(failures[1]?.error).toBeInstanceOf(Error)
       expect((entryConfig(ctx, 'noop') as { value?: string }).value).toBe('live')
-      await settleChokidarChangeThrottle()
+      await settleExactWatchSample()
 
       writeFileSync(filename, '- id: noop\n  config:\n    value: recovered\n')
       await eventually(() => (entryConfig(ctx, 'noop') as { value?: string }).value === 'recovered', 'valid recovery was not applied')
-      await settleChokidarChangeThrottle()
+      await settleExactWatchSample()
 
       unlinkSync(filename)
       await eventually(() => (entryConfig(ctx, 'noop') as { value?: string }).value === 'generated', 'user patch removal did not restore the app-owned patch')
       expect(failures).toHaveLength(2)
-      await settleChokidarChangeThrottle()
+      await settleExactWatchSample()
 
       // Default compose: the user layer IS the whole patch list, so a
       // fresh generation replaces the app-owned layer instead of stacking on it.
@@ -381,7 +388,7 @@ describe('boot with user patches', () => {
     withoutInclude.baseUrl = pathToFileURL(`${tmp()}/`).href
     await withoutInclude.plugin(Loader)
     await withoutInclude.plugin(Timer)
-    await withoutInclude.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
+    await withoutInclude.plugin(Hmr, exactHmrConfig())
     await expect(watchUserPatches(withoutInclude, { binName: NAME, filename: join(tmp(), PROFILE_PATCH_FILENAME) })).rejects.toThrow('requires the root Include entry')
     await withoutInclude.fiber.dispose()
   })
@@ -410,7 +417,7 @@ describe('boot with user patches', () => {
     const ctx = await boot(NAME, writeTree(dir))
     try {
       await ctx.plugin(Timer)
-      await ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
+      await ctx.plugin(Hmr, exactHmrConfig())
       const dispose = await watchUserPatches(ctx, { binName: NAME, filename })
       // Same user-layer path registered twice: HMR refuses; not a teardown race.
       await expect(watchUserPatches(ctx, { binName: NAME, filename })).rejects.toThrow('already registered')

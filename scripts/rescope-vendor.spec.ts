@@ -58,4 +58,15 @@ describe('rewritePackageNames', () => {
       '',
     ].join('\n'))
   })
+
+  it('preserves upstream package identities inside the Desktop SBOM fixture', () => {
+    const source = [
+      "peerDependencies: { cordis: '^4.0.0' },",
+      "name: 'cordis',",
+      "'cordis@4.0.0': { resolution: {} },",
+      '',
+    ].join('\n')
+
+    expect(rewritePackageNames(source, 'scripts/prepare-desktop-release.spec.ts').text).toBe(source)
+  })
 })

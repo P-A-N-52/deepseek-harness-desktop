@@ -18,7 +18,7 @@
 两处修复都落在 vendored 包中（记录于 `vendor/README.md`）：
 
 - `include/src/index.ts` 将每次子树变更——首次 apply、refresh、`internal/update` 补丁重应用——汇入每个 Include 一条的 promise 队列。group 的事务化 `update` 不可重入，因此序列化是正确性要求，而不是吞吐取舍。`refresh()` 也在队列内读取文件，使其内容变更判断与前一任务提交后的状态比较。
-- `hmr/src/index.ts` 给主 watcher 传入 `ignoreInitial: true`。初始扫描只会重新宣告启动刚刚消费过的文件；抑制它同时消除了启动期 refresh 和对已加载模块的多余 `add` 事件。`registerConfig()` 保留自己 `ignoreInitial: false` 的 watcher，因为注册时已存在的个人配置必须恰好应用一次。
+- `hmr/src/index.ts` 给主 Chokidar watcher 传入 `ignoreInitial: true`。初始扫描只会重新宣告启动刚刚消费过的文件；抑制它同时消除了启动期 refresh 和对已加载模块的多余 `add` 事件。`registerConfig()` 不使用该扫描：它的确切文件 stat 轮询器会显式采样注册状态，并把注册时已存在的个人配置恰好调度一次。
 
 两者齐备后，失败的启动走上预期路径：唯一一次 apply 失败，回滚并 dispose（资源释放）整棵树（执行 TUI 自身的 shutdown、恢复终端），`loader.create` reject，`boot()` 重新抛出带标签的诊断并以 1 退出。
 

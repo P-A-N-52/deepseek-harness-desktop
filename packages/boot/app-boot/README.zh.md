@@ -42,7 +42,7 @@ profile 是位于 `$DSH_HOME/profiles/<name>` 下的目录（harness home 由 [`
 - **`.env`**：产品 CLI 的普通环境层；调用目录的文件优先于 harness home 的文件，两者都低于继承环境。`loadLayeredEnv` 记录每个值的来源，按不区分大小写的方式拒绝 [bootstrap-only 文件变量](../../../.agents/notes/implemented/architecture/2026-08-04-configuration-source-ownership.md#decision)，并把其余值物化进 `process.env`，供 Loader 表达式和第三方库使用。受管凭据另存于 [`.credentials.yaml`](../../credentials/credentials-local/README.md)；留在任一 `.env` 中的凭据仍是低优先级后备值。
 - **`cordis.patch.yml`**（home 级）与 **`profiles/<name>/cordis.patch.yml`**：用户 patch 层，应用在所有组合包层之后（先应用逐 profile 的文件，再应用 home 级文件，因此后者优先级更高）：按 id 定位的 patch 会替换对应条目的整个 `config`（未改字段也要重述），`insert` 会添加条目，`!!js` 表达式则在挂载时插值。如果 patch 指定的条目 id 不在组合后的树中，则输出一条 stderr 警告。空文件或仅含注释的文件会抛出异常（其解析结果为空，而不是列表）；如需禁用该层，请使用 `[]`。
 
-每次 profile 启动都由 `watchUserPatches` 持续应用 `cordis.patch.yml` 的变更（一次性 surface 经由有界关闭 dispose 监视器）。即使该文件或其直接父目录不存在，监视器仍会监视确切路径；它会串行处理突发变更，并按调用方的层次顺序重新组合用户 patch（组合包层在下、overlay 在上）。读取失败、解析失败或 Loader 候选被拒时，最后一个可用树会继续运行；HMR 服务记录错误后广播 `hmr/config-update-failed(filename, Error)`，并隔离观察方的失败。上下文 dispose 时会关闭 watcher，并等待进行中的刷新结束。
+每次 profile 启动都由 `watchUserPatches` 持续应用 `cordis.patch.yml` 的变更（一次性 surface 经由有界关闭 dispose 监视器）。HMR 通过最深的现有祖先目录规范化确切文件名，并按配置的间隔只对该文件做 stat 轮询，因此注册完成时该文件及其直接父目录都可以不存在。注册时已存在的文件会被采样并调度一次；后续创建、变更、移除和重建会先被串行化与合并，再由 `watchUserPatches` 按调用方的层次顺序重新组合用户 patch（组合包层在下、overlay 在上）。读取失败、解析失败或 Loader 候选被拒时，最后一个可用树会继续运行；HMR 服务记录错误后广播 `hmr/config-update-failed(filename, Error)`，并隔离观察方的失败。上下文 dispose 时会先停止轮询，再等待首次对账与进行中的刷新结束。
 
 ## 模型体验
 

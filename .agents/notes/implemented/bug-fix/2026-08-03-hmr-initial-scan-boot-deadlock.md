@@ -18,7 +18,7 @@ Two defects compounded:
 Both halves are fixed in the vendored packages (logged in `vendor/README.md`):
 
 - `include/src/index.ts` funnels every child-tree mutation — initial apply, refresh, and `internal/update` patch re-application — through one per-Include promise queue. The group's transactional `update` is not reentrant, so serialization is a correctness requirement, not a throughput choice. `refresh()` also reads inside the queue so its changed-content check compares against the predecessor's committed state.
-- `hmr/src/index.ts` passes `ignoreInitial: true` to the main watcher. The initial scan only re-announces files boot has just consumed; suppressing it removes both the boot-time refresh and the spurious `add` events for already-loaded modules. `registerConfig()` keeps its own `ignoreInitial: false` watcher because a personal config present at registration must apply exactly once.
+- `hmr/src/index.ts` passes `ignoreInitial: true` to the main Chokidar watcher. The initial scan only re-announces files boot has just consumed; suppressing it removes both the boot-time refresh and the spurious `add` events for already-loaded modules. `registerConfig()` does not use that scan: its exact-file stat poller explicitly samples registration state and schedules a personal config already present exactly once.
 
 With both in place a failing boot follows the intended path: the single apply fails, the rollback disposes the tree (running the TUI's own shutdown, restoring the terminal), `loader.create` rejects, and `boot()` rethrows the labelled diagnostic with exit 1.
 

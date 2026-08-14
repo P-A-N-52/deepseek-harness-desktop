@@ -6,17 +6,15 @@
 // recorded: its header line carries no `cwd`
 // field (seedSession writes the session cwd itself, and a Windows temp path
 // substituted into the header would not round-trip through its JSON parse),
-// and no event references the workspace, so the lane replays on any host
-// with a usable `pwsh` — the lane mounts the pwsh stack through an overlay
-// (the shipped tree keeps the bash stack).
-import { spawnSync } from 'node:child_process'
+// and no event references the workspace, so the lane replays on any host —
+// the lane mounts the pwsh stack through an overlay, but never starts a
+// PowerShell process (the shipped tree keeps the platform shell stack).
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { resolvePwshPath } from '@deepseek-ai/dsh-pwsh-local'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   fixtureUserPrompts, launchWebScaffold, seedSession, webSnapshotMode,
@@ -32,18 +30,10 @@ const PROMPT = 'Run a PowerShell command that fails, then stop.'
 const SEED_ID = 'pwsh-terminal-web-e2e'
 const MODE = webSnapshotMode()
 
-// The overlay swaps the shipped bash executor for @deepseek-ai/dsh-pwsh-local;
-// a host without a usable `pwsh` cannot boot it, so the lane self-skips,
-// mirroring the pwshOnly ACP scenarios. The probe follows the executor's own
-// resolution (Program Files installs on Windows are found even when bare
-// `pwsh` is not on PATH), the same judgment the tool-pwsh tests reuse; record
-// mode skips the lane anyway, so the probe stays inert there.
-const HAS_PWSH = MODE === 'record' ? false : spawnSync(
-  resolvePwshPath(), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '$true'],
-  { encoding: 'utf8' },
-).status === 0
-
-describe.skipIf(MODE === 'record' || !HAS_PWSH)('web e2e: pwsh calls use the bash terminal-card layout', () => {
+// Replay only constructs the local executor and recomputes presentation from
+// the seeded result; process creation belongs to run()/start() and is never
+// reached. Record mode has no live-provider fixture for this authored lane.
+describe.skipIf(MODE === 'record')('web e2e: pwsh calls use the bash terminal-card layout', () => {
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page

@@ -104,6 +104,9 @@ const GENERIC_SKIPS: readonly GenericSkip[] = [
   // GROUP_ORDER holds `packages/<group>/` directory names, not package names.
   { file: 'scripts/gen-module-graph.ts', upstream: ['cordis'] },
   { file: 'scripts/gen-doc-graphs.ts', upstream: ['cordis'] },
+  // The Desktop SBOM fixture models an ordinary registry package named
+  // `cordis`; it is deployed input data, not an import of the vendored package.
+  { file: 'scripts/prepare-desktop-release.spec.ts', upstream: ['cordis'] },
 ]
 
 /** Cordis runtime event identifiers that resemble package subpaths. */

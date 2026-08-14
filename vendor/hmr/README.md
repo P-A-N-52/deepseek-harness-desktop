@@ -9,9 +9,13 @@ application files. Changes to framework-level dependencies fall back to
 
 Module watches canonicalize their existing base directory before opening
 Chokidar. Exact config watches likewise canonicalize the deepest existing
-ancestor, then restore any missing suffix. Callbacks and diagnostics retain the
-requested absolute filename, while the native backend receives one filesystem
-spelling even when Windows supplied an 8.3 alias.
+ancestor, then restore any missing suffix, but poll only that exact filename.
+This avoids recursively discovering a missing parent, where a directory scan
+can race installation of the child watcher. Callbacks and diagnostics retain
+the requested absolute filename, while the polling backend receives one
+filesystem spelling even when Windows supplied an 8.3 alias. Registration
+reconciles an existing file once before returning; disposal stops the poller
+before draining an active refresh.
 
 ## Requirements
 
@@ -44,6 +48,7 @@ spelling even when Windows supplied an 8.3 alias.
 | `root` | Chokidar roots to watch. Defaults to `['.']`. |
 | `ignored` | Picomatch patterns excluded from watch and reload analysis. |
 | `debounce` | Milliseconds to wait before processing a burst of changes. |
+| `interval` | Exact-config and Chokidar polling interval in milliseconds. Must be at least 1; defaults to 100. |
 
 ## Events
 
