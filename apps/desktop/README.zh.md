@@ -13,19 +13,53 @@ pnpm run desktop:dev
 pnpm run desktop:build
 ```
 
-开发命令启动 Desktop host 和它的本地 sidecar。构建命令在 `apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness Desktop.app` 创建一个未签名但具备发行结构的 macOS 应用。
+开发命令启动 Desktop host 和它的本地 sidecar。构建命令在 `apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness Desktop.app` 创建一个具备发行结构的 macOS 应用。该原始 Tauri 应用只是打包输入，不是可分发产物。
 
-## 发行产物
+## 未签名开发者预览产物
 
 支持的发行目标是 macOS 13.5 或更高版本的 Apple Silicon。Desktop 没有 Intel 或 universal 构建，没有自动更新器，也不提供超出 Harness 开发者预览范围的兼容性承诺。
 
 封闭 sidecar 使用 Node.js 24.19.0 和 `@yao-pkg/pkg` 6.21.0。应用携带两者的来源记录、产品与 Node 许可证、第三方声明、特定目标的 npm 与 Cargo CycloneDX SBOM，以及 host、sidecar、ripgrep 和 PTY helper 的 SHA-256 摘要。发行清单会拒绝缺失的证据、不匹配的部署目标或有未提交改动的源码树。
 
-`pnpm run desktop:package-release` 接受已构建应用、输出目录、Developer ID Application identity、`notarytool` keychain profile、annotated `desktop-v<dsh-version>` tag、Apple Team ID 和最低 macOS 版本。该命令要求 tag 指向干净的 `HEAD`，以 hardened runtime 签署嵌套代码和应用，对应用执行公证与 staple，创建带 `/Applications` 链接的 DMG 并签名，对 DMG 执行公证与 staple，以只读方式挂载 DMG 完成最终代码签名和 Gatekeeper 验证，并写出 `SHA256SUMS` 与 `release-manifest.json`。
+在干净构建 revision 上创建 annotated `desktop-unsigned-v<dsh-version>` tag，从该 revision 构建应用，然后在本地打包：
 
-无凭据 CI 会构建并运行未签名应用，但不会使用 Apple 凭据或发布发行资产。只允许手动运行的 `Desktop release` workflow 是公开发行路径。它只接受受保护 `desktop-release` environment 中与 dsh 版本精确对应的 annotated `desktop-v<dsh-version>` tag，使用冻结的 pnpm 与 Cargo lockfile 构建，把 Apple 凭据导入临时 keychain，运行打包命令，重新检查生成的 hash 与 manifest，并且只发布 DMG、`SHA256SUMS` 和 `release-manifest.json`。
+```sh
+pnpm run desktop:package-dmg -- \
+  --app "apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness Desktop.app" \
+  --output .artifacts/desktop-dmg \
+  --minimum-macos 13.5 \
+  --tag desktop-unsigned-v<dsh-version>
 
-受保护 environment 必须要求 reviewer，并且只允许 `desktop-v*` tag。它定义 `DESKTOP_RELEASE_ENABLED=true`、`DESKTOP_RELEASE_REPOSITORY`、`DESKTOP_APPLE_SIGNING_IDENTITY` 和 `DESKTOP_APPLE_TEAM_ID`；其中的 secret 提供 base64 编码的 Developer ID P12 及其密码，以及 base64 编码的 App Store Connect API key、key ID 和 issuer ID。仓库文件和普通 CI 不得持有这些凭据。只有 workflow 完成签名、在线公证、staple、挂载 DMG 后的 Gatekeeper 验证以及 GitHub Release 发布，签名发行版才存在。发行理由记录在 [macOS Desktop 发行产物说明](../../.agents/notes/implemented/process/2026-08-14-macos-desktop-release-artifact.md)中。
+pnpm run desktop:verify-dmg -- \
+  --input .artifacts/desktop-dmg \
+  --minimum-macos 13.5 \
+  --expected-tag desktop-unsigned-v<dsh-version>
+```
+
+打包器不会修改 Tauri 构建。它把应用复制到私有目录，为每个嵌套 Mach-O 和外层应用添加 ad-hoc hardened-runtime seal，创建带 `/Applications` 链接的未签名 DMG，以只读方式挂载镜像，并针对挂载副本重复 bundle 与 runtime 证据检查。它以原子方式写出且只写出三个文件：`DeepSeek-Harness-Desktop_<version>_aarch64_unsigned.dmg`、`SHA256SUMS` 和 `release-manifest.json`。
+
+该产物没有 Apple Developer ID，且未经公证。Apple 没有认证其发布者或执行公证恶意软件检查，Gatekeeper 预计会拦截首次启动。SHA-256 摘要只能确认字节与从已信任来源获得的 manifest 一致，不能认证该来源。
+
+把三个文件下载到同一目录，并在打开 DMG 前验证它们：
+
+```sh
+shasum -a 256 -c SHA256SUMS
+```
+
+把应用拖入 `/Applications` 并尝试启动一次。确认来源、版本与摘要后，按照 Apple 针对单个应用的例外流程进入**系统设置 → 隐私与安全性 → 仍要打开**。受管理的 Mac 可能禁止该例外。不要移除 quarantine attribute 或关闭 Gatekeeper。参见 [Apple 的安全打开应用指引](https://support.apple.com/en-gb/102445)。
+
+无凭据 CI 会构建并运行原始应用，但不打包或发布 DMG。`pnpm run desktop:publish-dmg` 是本地 publisher；以下命令只验证产物并显示目标仓库：
+
+```sh
+pnpm run desktop:publish-dmg -- \
+  --input .artifacts/desktop-dmg \
+  --repo P-A-N-52/deepseek-harness-desktop \
+  --tag desktop-unsigned-v<dsh-version>
+```
+
+干净 commit 与 annotated tag 已存在于 `origin` 后，只有在确实要写入 GitHub Release 时才为该命令追加 `--publish`。
+
+发布动作仍不会增加 Apple 信任。发行决定记录在[本地未签名 macOS Desktop 说明](../../.agents/notes/implemented/process/2026-08-14-local-unsigned-macos-desktop-distribution.md)中。
 
 ## 运行时与数据
 

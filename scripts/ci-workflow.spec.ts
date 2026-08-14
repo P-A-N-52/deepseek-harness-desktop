@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import * as yaml from 'js-yaml'
 import { describe, expect, it } from 'vitest'
@@ -59,75 +59,21 @@ describe('Desktop CI workflow', () => {
   })
 })
 
-describe('Desktop release workflow', () => {
-  it('publishes only verified Apple Silicon assets from a protected annotated tag', () => {
-    const workflow = loadWorkflow('.github/workflows/desktop-release.yml')
-    const release = workflowJob(workflow, 'release')
-    if (!Array.isArray(release.steps)) throw new TypeError('Desktop release must define release steps')
-    const steps = release.steps.filter(isRecord)
-
-    expect(workflow.on).toEqual({ workflow_dispatch: {} })
-    expect(workflow.permissions).toEqual({ contents: 'read' })
-    expect(release).toMatchObject({
-      environment: 'desktop-release',
-      permissions: { contents: 'write' },
-      'runs-on': 'macos-15',
-    })
-    expect(steps.find(step => step.uses === 'actions/checkout@v6')).toMatchObject({
-      with: {
-        'fetch-depth': 0,
-        'persist-credentials': false,
-      },
-    })
-    expect(steps.find(step => step.uses === 'pnpm/action-setup@v6')).toMatchObject({
-      with: {
-        dest: runnerPrivatePnpmDestination,
-        version: '11.7.0',
-      },
-    })
-
-    const authorize = steps.find(step => step.name === 'Authorize the immutable release')
-    const credentials = steps.find(step => step.name === 'Import protected Apple credentials')
-    const packageRelease = steps.find(step => step.name === 'Sign, notarize, staple, and verify the release')
-    const cleanup = steps.find(step => step.name === 'Remove temporary Apple credentials')
-    const publish = steps.find(step => step.name === 'Publish the verified GitHub release')
-    if (cleanup === undefined) throw new TypeError('Desktop release must remove its temporary credentials')
-    if (typeof publish?.run !== 'string') throw new TypeError('Desktop release must define its publication command')
-    const publishRun = publish.run
-    expect(authorize?.run).toContain('[ "$GITHUB_REF_TYPE" = tag ]')
-    expect(authorize?.run).toContain('[ "$(git cat-file -t "$GITHUB_REF_NAME")" = tag ]')
-    expect(authorize?.run).toContain('git merge-base --is-ancestor "$GITHUB_SHA" "$default_ref"')
-    expect(authorize?.run).toContain('DESKTOP_RELEASE_ENABLED=true')
-    expect(credentials?.env).toEqual({
-      CERTIFICATE_P12_BASE64: '${{ secrets.DESKTOP_APPLE_CERTIFICATE_P12_BASE64 }}',
-      CERTIFICATE_PASSWORD: '${{ secrets.DESKTOP_APPLE_CERTIFICATE_PASSWORD }}',
-      NOTARY_ISSUER_ID: '${{ secrets.DESKTOP_APPLE_NOTARY_ISSUER_ID }}',
-      NOTARY_KEY_ID: '${{ secrets.DESKTOP_APPLE_NOTARY_KEY_ID }}',
-      NOTARY_KEY_P8_BASE64: '${{ secrets.DESKTOP_APPLE_NOTARY_KEY_P8_BASE64 }}',
-      SIGNING_IDENTITY: '${{ vars.DESKTOP_APPLE_SIGNING_IDENTITY }}',
-      TEAM_ID: '${{ vars.DESKTOP_APPLE_TEAM_ID }}',
-    })
-    expect(packageRelease?.run).toContain('pnpm run desktop:package-release')
-    expect(packageRelease?.run).toContain('--notary-profile "$DSH_NOTARY_PROFILE"')
-    expect(packageRelease?.run).toContain('--tag "$GITHUB_REF_NAME"')
-    expect(cleanup?.if).toBe('always()')
-    expect(steps.indexOf(cleanup)).toBeLessThan(steps.indexOf(publish))
-    expect(publish?.env).toEqual({ GH_TOKEN: '${{ github.token }}' })
-    expect(publishRun).toContain('git ls-remote --refs origin "refs/tags/$GITHUB_REF_NAME"')
-    expect(publishRun).toContain('gh release create "${release_args[@]}"')
-    expect(publishRun).toContain('--draft')
-    expect(publishRun).toContain('release.isDraft !== true')
-    expect(publishRun).toContain('gh release download "$GITHUB_REF_NAME" --dir "$retry_root"')
-    expect(publishRun).toContain('cmp "$RELEASE_OUTPUT/$asset" "$retry_root/$asset"')
-    expect(publishRun).toContain('gh release edit "$GITHUB_REF_NAME" --verify-tag --draft=false')
-    const assetArgumentPattern = [
-      'release_args\\+=\\(',
-      '\\s+"\\$RELEASE_OUTPUT/\\$dmg_name"',
-      '\\s+"\\$RELEASE_OUTPUT/SHA256SUMS"',
-      '\\s+"\\$RELEASE_OUTPUT/release-manifest\\.json"',
-      '\\s+\\)',
-    ].join('')
-    expect(publishRun).toMatch(new RegExp(assetArgumentPattern, 'u'))
+describe('Desktop local publication', () => {
+  it('keeps Apple credentials and release writes out of GitHub Actions', () => {
+    expect(existsSync(resolve(root, '.github/workflows/desktop-release.yml'))).toBe(false)
+    const serialized = workflowPaths
+      .map(path => readFileSync(resolve(root, path), 'utf8'))
+      .join('\n')
+    for (const forbidden of [
+      'DESKTOP_APPLE_',
+      'notarytool',
+      'stapler',
+      'desktop:package-dmg',
+      'desktop:publish-dmg',
+    ]) {
+      expect(serialized).not.toContain(forbidden)
+    }
   })
 })
 

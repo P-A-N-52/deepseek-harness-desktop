@@ -8,7 +8,7 @@ This repository temporarily carries the complete Harness monorepo because the se
 
 ## Desktop status
 
-The Desktop release target is Apple Silicon macOS 13.5 or later. Local builds produce an unsigned release-shaped `.app`; the release packager verifies a clean annotated tag, applies Developer ID signing and hardened-runtime entitlements, notarizes and staples the application and DMG, mounts the DMG for final verification, and emits checksums and a release manifest. No artifact is a public release until those signed checks pass. Automatic updates, Intel builds, and other operating systems are not supported.
+The Desktop target is Apple Silicon macOS 13.5 or later. Local builds produce a release-shaped `.app`; the local packager verifies a clean annotated tag, ad-hoc seals a private copy with hardened runtime, mounts and verifies an unsigned DMG, and emits checksums plus an explicit trust manifest. The DMG has no Apple Developer ID and is not notarized, so Gatekeeper approval is expected and the artifact does not authenticate its publisher. Automatic updates, Intel builds, and other operating systems are not supported.
 
 ```sh
 pnpm install

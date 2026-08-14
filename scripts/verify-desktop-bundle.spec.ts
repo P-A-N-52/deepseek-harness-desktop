@@ -8,6 +8,7 @@ import { lockedSeaPacker } from './prepare-desktop-release.ts'
 import { SEA_NODE_RANGE, SeaTarget, seaRuntimeArchive } from './single-exe-build.ts'
 import {
   assertEvidenceBytes,
+  assertAdHocCodeSignature,
   assertExactSidecarEntitlements,
   assertExpectedRuntimeManifestCommit,
   assertPinnedNodeSeaEvidence,
@@ -77,6 +78,21 @@ describe('Desktop bundle verifier', () => {
         '</dict></plist>',
       ].join(''))
     }).toThrow('sidecar entitlements')
+  })
+
+  it('accepts only an authority-free ad-hoc hardened-runtime seal', () => {
+    const signature = [
+      'CodeDirectory v=20500 flags=0x10002(adhoc,runtime)',
+      'Signature=adhoc',
+      'TeamIdentifier=not set',
+    ].join('\n')
+    expect(() => { assertAdHocCodeSignature(signature, 'Desktop.app') }).not.toThrow()
+    expect(() => { assertAdHocCodeSignature(`${signature}\nAuthority=Developer ID Application: Example`, 'Desktop.app') })
+      .toThrow('unexpectedly carries a signing authority')
+    expect(() => { assertAdHocCodeSignature(signature.replace('runtime', 'linker-signed'), 'Desktop.app') })
+      .toThrow('not sealed with hardened runtime')
+    expect(() => { assertAdHocCodeSignature(signature.replace('TeamIdentifier=not set', 'TeamIdentifier=TEAM'), 'Desktop.app') })
+      .toThrow('unexpectedly carries a TeamIdentifier')
   })
 
   it('requires every bundled release-evidence file to match its source bytes', async () => {

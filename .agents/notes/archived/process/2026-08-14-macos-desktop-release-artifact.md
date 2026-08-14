@@ -1,6 +1,7 @@
 # Agent Note: macOS Desktop release artifact
 
 Status: implemented
+Archived: 2026-08-14
 
 English | [中文](2026-08-14-macos-desktop-release-artifact.zh.md)
 

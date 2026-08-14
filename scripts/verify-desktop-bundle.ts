@@ -1,9 +1,9 @@
 /**
- * Validate the sealed macOS Desktop application before CI accepts or releases it.
+ * Validate the sealed macOS Desktop application before CI accepts or packages it.
  *
  * Build verification proves the immutable source payloads and release evidence.
- * Signed and release verification add Developer ID, hardened-runtime,
- * Gatekeeper, notarization, and mounted-DMG checks.
+ * Ad-hoc verification proves that every launched code object and the outer
+ * application have one internally consistent hardened-runtime seal.
  */
 
 import { createReadStream } from 'node:fs'
@@ -11,16 +11,12 @@ import { createHash } from 'node:crypto'
 import {
   access,
   lstat,
-  mkdtemp,
   open,
   readFile,
   readdir,
-  readlink,
-  rm,
   stat,
 } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { basename, join, relative, resolve } from 'node:path'
+import { relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { desktopVersion, verifyDesktopVersion } from './desktop-version.ts'
 import { lockedSeaPacker } from './prepare-desktop-release.ts'
@@ -101,8 +97,8 @@ type RuntimeRole = keyof typeof RUNTIME_PATHS
 /** A parsed dotted macOS version. */
 export type MacOSVersion = readonly number[]
 
-/** The validation depth appropriate to one Desktop artifact lifecycle stage. */
-export type DesktopBundleMode = 'build' | 'signed' | 'release'
+/** The validation depth appropriate to one Desktop application lifecycle stage. */
+export type DesktopBundleMode = 'build' | 'ad-hoc'
 
 /** Inputs for Desktop bundle validation. */
 export interface DesktopBundleVerification {
@@ -112,12 +108,8 @@ export interface DesktopBundleVerification {
   readonly architecture: 'arm64'
   /** The product's supported macOS floor. */
   readonly minimumMacOS: string
-  /** Whether only layout, signed code, or notarized distribution is required. */
+  /** Whether immutable build bytes or the final ad-hoc code seal is required. */
   readonly mode: DesktopBundleMode
-  /** The expected Developer ID team when signed code is required. */
-  readonly teamId?: string
-  /** The notarized disk image when release validation is required. */
-  readonly dmg?: string
   /** The immutable source commit the bundled runtime manifest must describe. */
   readonly expectedCommit?: string
 }
@@ -207,11 +199,10 @@ export async function verifyDesktopBundle(options: DesktopBundleVerification): P
   if (machOs.length === 0) throw new Error(`Desktop bundle contains no Mach-O files: ${app}`)
   for (const path of machOs) verifyMachO(app, path, options.architecture, floor)
 
-  if (options.mode !== 'build') {
-    if (options.teamId === undefined || options.teamId === '') throw new Error(`${options.mode} verification requires --team-id`)
-    verifyDeveloperId(app, options.teamId, true)
+  if (options.mode === 'ad-hoc') {
+    verifyAdHocCode(app, true)
     for (const path of machOs) {
-      verifyDeveloperId(path, options.teamId, false)
+      verifyAdHocCode(path, false)
       const entitlements = commandOutput('codesign', ['-d', '--entitlements', ':-', path])
       if (entitlements.includes('com.apple.security.get-task-allow')) {
         throw new Error(`${displayPath(app, path)} must not grant com.apple.security.get-task-allow`)
@@ -220,11 +211,6 @@ export async function verifyDesktopBundle(options: DesktopBundleVerification): P
     assertExactSidecarEntitlements(
       commandOutput('codesign', ['-d', '--entitlements', ':-', resolve(app, RUNTIME_PATHS.sidecar)]),
     )
-  }
-
-  if (options.mode === 'release') {
-    if (options.dmg === undefined || options.dmg === '') throw new Error('release verification requires --dmg')
-    await verifyNotarizedDmg(app, resolve(options.dmg), options)
   }
 
   console.log(`desktop bundle verified (${options.mode}): ${app}`)
@@ -502,65 +488,6 @@ function highestDeploymentTarget(path: string): MacOSVersion {
       compareMacOSVersions(candidate, current) > 0 ? candidate : current)
 }
 
-async function verifyNotarizedDmg(
-  sourceApp: string,
-  dmg: string,
-  options: DesktopBundleVerification,
-): Promise<void> {
-  if (options.teamId === undefined || options.teamId === '') {
-    throw new Error('release verification requires --team-id')
-  }
-  const teamId = options.teamId
-  await assertRegularFile(dmg)
-  run('hdiutil', ['verify', dmg])
-  run('codesign', ['--verify', '--verbose=4', dmg])
-  run('xcrun', ['stapler', 'validate', sourceApp])
-  run('xcrun', ['stapler', 'validate', dmg])
-  run('spctl', ['--assess', '--type', 'execute', '--verbose=4', sourceApp])
-  run('spctl', ['--assess', '--type', 'open', '--verbose=4', dmg])
-
-  const root = await mkdtemp(join(tmpdir(), 'dsh-desktop-dmg-'))
-  const mountpoint = resolve(root, 'mounted')
-  await rm(mountpoint, { force: true, recursive: true })
-  let attached = false
-  let failure: Error | undefined
-  try {
-    run('hdiutil', ['attach', '-readonly', '-nobrowse', '-mountpoint', mountpoint, dmg])
-    attached = true
-    const entries = (await readdir(mountpoint)).sort()
-    const expected = ['Applications', basename(sourceApp)].sort()
-    if (entries.length !== expected.length || entries.some((entry, index) => entry !== expected[index])) {
-      throw new Error(`DMG root must contain exactly ${expected.join(' and ')}, got ${entries.join(', ')}`)
-    }
-    const applications = resolve(mountpoint, 'Applications')
-    if (await readlink(applications) !== '/Applications') {
-      throw new Error('DMG Applications link must target /Applications')
-    }
-    const mountedApp = resolve(mountpoint, basename(sourceApp))
-    await verifyDesktopBundle({
-      app: mountedApp,
-      architecture: options.architecture,
-      minimumMacOS: options.minimumMacOS,
-      mode: 'signed',
-      teamId,
-      ...(options.expectedCommit === undefined ? {} : { expectedCommit: options.expectedCommit }),
-    })
-    run('xcrun', ['stapler', 'validate', mountedApp])
-    run('spctl', ['--assess', '--type', 'execute', '--verbose=4', mountedApp])
-  } catch (error) {
-    failure = error instanceof Error ? error : new Error(`Desktop DMG verification failed: ${String(error)}`)
-  } finally {
-    if (attached) {
-      const detached = attempt('hdiutil', ['detach', mountpoint])
-      if (detached.status !== 0 && failure === undefined) {
-        failure = new Error(`hdiutil detach failed: ${detached.stdout}\n${detached.stderr}`)
-      }
-    }
-    await rm(root, { force: true, recursive: true })
-  }
-  if (failure !== undefined) throw failure
-}
-
 async function walk(directory: string, files: string[]): Promise<void> {
   const entries = await readdir(directory, { withFileTypes: true })
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
@@ -647,19 +574,27 @@ function commandOutput(command: string, args: readonly string[]): string {
   return `${result.stdout}\n${result.stderr}`
 }
 
-function verifyDeveloperId(path: string, teamId: string, deep: boolean): void {
+/**
+ * Reject any code signature that is not the expected local ad-hoc runtime seal.
+ *
+ * @param signature - Combined `codesign -dvvv` output.
+ * @param path - Code object used in diagnostics.
+ * @returns Nothing after the ad-hoc hardened-runtime facts match.
+ */
+export function assertAdHocCodeSignature(signature: string, path: string): void {
+  if (!signature.includes('Signature=adhoc')) throw new Error(`${path} is not ad-hoc signed`)
+  if (!signature.includes('TeamIdentifier=not set')) throw new Error(`${path} unexpectedly carries a TeamIdentifier`)
+  if (/^Authority=/mu.test(signature)) throw new Error(`${path} unexpectedly carries a signing authority`)
+  if (signature.includes('Timestamp=')) throw new Error(`${path} unexpectedly carries a signing timestamp`)
+  if (!/flags=0x[0-9a-f]+\([^)]*\bruntime\b[^)]*\)/iu.test(signature)) {
+    throw new Error(`${path} is not sealed with hardened runtime`)
+  }
+}
+
+function verifyAdHocCode(path: string, deep: boolean): void {
   run('codesign', ['--verify', ...(deep ? ['--deep'] : []), '--strict', '--verbose=4', path])
   const signature = commandOutput('codesign', ['-dvvv', path])
-  if (!signature.includes('Authority=Developer ID Application:')) {
-    throw new Error(`${path} is not signed by a Developer ID Application certificate`)
-  }
-  if (!signature.includes(`TeamIdentifier=${teamId}`)) {
-    throw new Error(`${path} does not carry expected TeamIdentifier=${teamId}`)
-  }
-  if (!/flags=0x[0-9a-f]+\(runtime\)/iu.test(signature)) {
-    throw new Error(`${path} is not signed with hardened runtime`)
-  }
-  if (!signature.includes('Timestamp=')) throw new Error(`${path} has no secure signing timestamp`)
+  assertAdHocCodeSignature(signature, path)
 }
 
 async function sha256(path: string): Promise<string> {
@@ -681,18 +616,16 @@ async function main(): Promise<void> {
     options: {
       app: { type: 'string' },
       arch: { type: 'string', default: 'arm64' },
-      dmg: { type: 'string' },
       mode: { type: 'string', default: 'build' },
       'minimum-macos': { type: 'string' },
-      'team-id': { type: 'string' },
     },
     allowPositionals: false,
   })
   if (values.app === undefined || values['minimum-macos'] === undefined) {
-    throw new Error('usage: verify-desktop-bundle.ts --app <app> --minimum-macos <version> [--mode build|signed|release] [--dmg <dmg>] [--team-id <team>]')
+    throw new Error('usage: verify-desktop-bundle.ts --app <app> --minimum-macos <version> [--mode build|ad-hoc]')
   }
   const mode = values.mode
-  if (mode !== 'build' && mode !== 'signed' && mode !== 'release') {
+  if (mode !== 'build' && mode !== 'ad-hoc') {
     throw new Error(`invalid Desktop verification mode: ${mode}`)
   }
   if (values.arch !== 'arm64') throw new Error(`Desktop release requires --arch arm64, got ${values.arch}`)
@@ -701,8 +634,6 @@ async function main(): Promise<void> {
     architecture: values.arch,
     minimumMacOS: values['minimum-macos'],
     mode,
-    ...(values['team-id'] === undefined ? {} : { teamId: values['team-id'] }),
-    ...(values.dmg === undefined ? {} : { dmg: values.dmg }),
   }
   await verifyDesktopBundle(options)
 }

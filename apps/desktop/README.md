@@ -13,19 +13,53 @@ pnpm run desktop:dev
 pnpm run desktop:build
 ```
 
-The development command starts the Desktop host and its local sidecar. The build command creates an unsigned release-shaped macOS application at `apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness Desktop.app`.
+The development command starts the Desktop host and its local sidecar. The build command creates a release-shaped macOS application at `apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness Desktop.app`. That raw Tauri application is a packaging input, not the distributable artifact.
 
-## Release artifact
+## Unsigned developer-preview artifact
 
 The supported distribution target is Apple Silicon macOS 13.5 or later. Desktop has no Intel or universal build, no automatic updater, and no compatibility promise beyond the Harness developer preview.
 
 The sealed sidecar uses Node.js 24.19.0 and `@yao-pkg/pkg` 6.21.0. The application carries their provenance, the product and Node licenses, third-party notices, target-specific npm and Cargo CycloneDX SBOMs, and SHA-256 digests for the host, sidecar, ripgrep, and PTY helper. The release manifest rejects missing evidence, a mismatched deployment target, or an uncommitted source tree.
 
-`pnpm run desktop:package-release` accepts an already built application, output directory, Developer ID Application identity, `notarytool` keychain profile, annotated `desktop-v<dsh-version>` tag, Apple Team ID, and minimum macOS version. It requires that tag to name the clean `HEAD`, signs nested code and the application with hardened runtime, notarizes and staples the application, creates and signs a DMG with an `/Applications` link, notarizes and staples the DMG, mounts it read-only for final code-signing and Gatekeeper verification, and writes `SHA256SUMS` plus `release-manifest.json`.
+Create an annotated `desktop-unsigned-v<dsh-version>` tag on a clean build revision, build the application from that revision, and package it locally:
 
-Credential-free CI builds and exercises the unsigned application but neither consumes Apple credentials nor publishes release assets. The manual-only `Desktop release` workflow is the public release path. It accepts only the exact annotated `desktop-v<dsh-version>` tag in the protected `desktop-release` environment, builds with the pnpm and Cargo lockfiles frozen, imports the Apple credentials into a temporary keychain, runs the packaging command, rechecks the emitted hashes and manifest, and publishes only the DMG, `SHA256SUMS`, and `release-manifest.json`.
+```sh
+pnpm run desktop:package-dmg -- \
+  --app "apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness Desktop.app" \
+  --output .artifacts/desktop-dmg \
+  --minimum-macos 13.5 \
+  --tag desktop-unsigned-v<dsh-version>
 
-The protected environment must require a reviewer and allow only `desktop-v*` tags. It defines `DESKTOP_RELEASE_ENABLED=true`, `DESKTOP_RELEASE_REPOSITORY`, `DESKTOP_APPLE_SIGNING_IDENTITY`, and `DESKTOP_APPLE_TEAM_ID`; its secrets provide the base64-encoded Developer ID P12, its password, and the base64-encoded App Store Connect API key with its key and issuer IDs. No credential belongs in repository files or ordinary CI. A signed release exists only after the workflow completes signing, online notarization, stapling, mounted-DMG Gatekeeper verification, and GitHub Release publication. The release rationale is recorded in the [macOS Desktop release artifact note](../../.agents/notes/implemented/process/2026-08-14-macos-desktop-release-artifact.md).
+pnpm run desktop:verify-dmg -- \
+  --input .artifacts/desktop-dmg \
+  --minimum-macos 13.5 \
+  --expected-tag desktop-unsigned-v<dsh-version>
+```
+
+The packager never changes the Tauri build. It copies the application into a private directory, gives every nested Mach-O and the outer application an ad-hoc hardened-runtime seal, creates an unsigned DMG with an `/Applications` link, mounts the image read-only, and repeats the bundle and runtime-evidence checks against the mounted copy. It atomically writes exactly three files: `DeepSeek-Harness-Desktop_<version>_aarch64_unsigned.dmg`, `SHA256SUMS`, and `release-manifest.json`.
+
+This artifact has no Apple Developer ID and is not notarized. Apple has not authenticated its publisher or performed the notarization malware check, and Gatekeeper is expected to block its first launch. A SHA-256 digest confirms only that the bytes match a manifest obtained from a source you already trust; it does not authenticate that source.
+
+Download all three files into one directory and verify them before opening the DMG:
+
+```sh
+shasum -a 256 -c SHA256SUMS
+```
+
+Drag the application to `/Applications` and try to open it once. After confirming the source, version, and digest, follow Apple's per-application exception path in **System Settings → Privacy & Security → Open Anyway**. Managed Macs may prohibit that exception. Do not remove quarantine attributes or disable Gatekeeper. See [Apple's guidance for opening apps safely](https://support.apple.com/en-gb/102445).
+
+Credential-free CI builds and exercises the raw application but does not package or publish the DMG. `pnpm run desktop:publish-dmg` is a local publisher; the command below only verifies the artifact and shows the intended repository:
+
+```sh
+pnpm run desktop:publish-dmg -- \
+  --input .artifacts/desktop-dmg \
+  --repo P-A-N-52/deepseek-harness-desktop \
+  --tag desktop-unsigned-v<dsh-version>
+```
+
+After the clean commit and annotated tag exist on `origin`, append `--publish` to that command only for an intentional GitHub Release write.
+
+Publication still does not add Apple trust. The distribution decision is recorded in the [local unsigned macOS Desktop note](../../.agents/notes/implemented/process/2026-08-14-local-unsigned-macos-desktop-distribution.md).
 
 ## Runtime and data
 

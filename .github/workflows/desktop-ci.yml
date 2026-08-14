@@ -76,8 +76,9 @@ jobs:
         run: >-
           pnpm exec vitest run
           scripts/desktop-version.spec.ts
-          scripts/package-desktop-release.spec.ts
+          scripts/package-desktop-dmg.spec.ts
           scripts/prepare-desktop-release.spec.ts
+          scripts/publish-desktop-dmg.spec.ts
           scripts/run-desktop-tauri.spec.ts
           scripts/single-exe-build.spec.ts
           scripts/verify-desktop-app-lifecycle.spec.ts
