@@ -61,6 +61,7 @@ import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-agent'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
+import { installTestAppModuleResolver } from '../../../packages/preset/agent-presets/tests/app-module-resolver.ts'
 import { REPO_ROOT, requireDist } from './support.ts'
 
 // Host-side web e2e cannot import a browser package: doing so would pull that
@@ -506,7 +507,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     await mkdir(profileDir, { recursive: true })
     const rootConfig = join(profileDir, 'cordis.yml')
     await writeFile(rootConfig, '[]\n')
-    ctx.baseUrl = pathToFileURL(profileDir).href + '/'
+    installTestAppModuleResolver(ctx, pathToFileURL(profileDir).href + '/')
     // This direct Loader harness supplies the same root-path capability as app-boot.
     ctx.provide('dshHomePath', dshHomePath)
     // A host with no command line still provides one: the web bundle's startup

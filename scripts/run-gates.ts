@@ -5,16 +5,16 @@
  * dependency graphs, scheduler environment, and process diagnostics.
  * @see ../.agents/notes/implemented/process/2026-07-06-parallel-pre-push-gates.md
  */
-import { spawn } from 'node:child_process'
+import { type ChildProcess, spawn, spawnSync } from 'node:child_process'
 import { availableParallelism } from 'node:os'
-import { resolve } from 'node:path'
+import { resolve, win32 } from 'node:path'
 import { performance } from 'node:perf_hooks'
+import { setTimeout as delay } from 'node:timers/promises'
 import { COVERAGE_EXEMPT_ENV, coverageExemptHeavySuites } from './coverage-exempt.ts'
 
 /** A named aggregate exposed by the gate runner. */
 export type Mode =
   | 'ci-primary'
-  | 'ci-linux-primary'
   | 'ci-static'
   | 'ci-lint-contracts-ready'
   | 'ci-coverage'
@@ -28,7 +28,7 @@ export type Mode =
   | 'check-all'
   | 'doc-sync'
 
-type GateResultStatus = 'passed' | 'failed' | 'skipped'
+type GateResultStatus = 'passed' | 'failed' | 'cancelled' | 'skipped'
 type GateState = 'pending' | 'running' | GateResultStatus
 
 /** A command and its dependency metadata inside one aggregate. */
@@ -69,10 +69,17 @@ interface ConcurrencyDefault {
   source: string
 }
 
-type GateExecutor = (gate: Gate) => Promise<GateResult>
-type ResultObserver = (result: GateResult) => void
+type GateExecutor = (gate: Gate, cancelSignal: AbortSignal) => Promise<GateResult>
+
+interface RunGatesOptions {
+  stopOnRequiredFailure?: boolean
+  onStop?: (result: GateResult) => void
+}
 
 const root = resolve(import.meta.dirname, '..')
+const PROCESS_TREE_FREEZE_MS = 5_000
+const PROCESS_TREE_CONFIRM_MS = 5_000
+const PROCESS_TREE_POLL_MS = 50
 if (import.meta.main) {
   process.exitCode = await main(process.argv.slice(2))
 }
@@ -89,17 +96,38 @@ async function main(args: string[]): Promise<number> {
   const startedAt = performance.now()
   console.log(`run-gates: ${mode} running ${gates.length} gate(s) with ${maxConcurrency} worker(s) from ${concurrencySource}.`)
 
-  const results = await runGates(gates, maxConcurrency, runGate, printResult)
+  let stopCause: GateResult | undefined
+  const results = await runGates(gates, maxConcurrency, runGate, {
+    stopOnRequiredFailure: stopsOnRequiredFailure(mode),
+    onStop: (result) => { stopCause = result },
+  })
+  if (stopCause !== undefined) {
+    console.error(
+      `run-gates: STOP after required gate ${stopCause.gate.label} ${stopCause.status}; all started gates settled.`,
+    )
+  }
+  for (const result of results) printResult(result)
   printSummary(results, performance.now() - startedAt)
-  return results.some(result => result.gate.allowFailure !== true && (result.status === 'failed' || result.status === 'skipped'))
+  return results.some(result => result.gate.allowFailure !== true && result.status !== 'passed')
     ? 1
     : 0
+}
+
+/**
+ * Select modes where a blocking failure makes further work irrelevant.
+ * @param selectedMode - aggregate mode being executed.
+ * @returns true when the runner cancels active siblings and skips pending gates.
+ */
+export function stopsOnRequiredFailure(selectedMode: Mode): boolean {
+  return selectedMode !== 'check-all'
+    && selectedMode !== 'doc-sync'
+    && selectedMode !== 'ci-windows-complete'
+    && selectedMode !== 'ci-windows-observational'
 }
 
 function parseMode(raw: string | undefined): Mode {
   switch (raw) {
     case 'ci-primary':
-    case 'ci-linux-primary':
     case 'ci-static':
     case 'ci-lint-contracts-ready':
     case 'ci-coverage':
@@ -115,7 +143,7 @@ function parseMode(raw: string | undefined): Mode {
       return raw
     default:
       throw new Error(
-        `run-gates: expected mode ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-snapshot | ci-artifacts | ci-consumers | ci-windows-blocking | ci-windows-complete | ci-windows-observational | node-compat | check-all | doc-sync, got ${JSON.stringify(raw)}.`,
+        `run-gates: expected mode ci-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-snapshot | ci-artifacts | ci-consumers | ci-windows-blocking | ci-windows-complete | ci-windows-observational | node-compat | check-all | doc-sync, got ${JSON.stringify(raw)}.`,
       )
   }
 }
@@ -193,8 +221,6 @@ export function gatesForMode(selected: Mode): Gate[] {
   switch (selected) {
     case 'ci-primary':
       return ciPrimaryGates()
-    case 'ci-linux-primary':
-      return [...ciPrimaryGates(), webSnapshotGate(['built-package-invariants'])]
     case 'ci-static':
       return ciStaticGates({ ownsBuild: false })
     case 'ci-lint-contracts-ready':
@@ -228,7 +254,7 @@ export function gatesForMode(selected: Mode): Gate[] {
         pnpmScript('duplication', 'duplication'),
         snapshotGate(),
         pnpmScript('build', 'build'),
-        pnpmScript('build:web', 'build:web'),
+        webSnapshotGate(['build']),
         ...hygieneLeafGates({ artifactNeeds: ['build'] }),
         ...docSyncLeafGates({
           docTypecheckNeeds: ['build'],
@@ -703,14 +729,14 @@ function findDependencyCycle(gates: readonly Gate[]): string[] | undefined {
  * @param gates - complete aggregate to execute.
  * @param maxActive - maximum concurrent child count.
  * @param execute - child-process executor.
- * @param observe - result observer invoked when each gate settles.
+ * @param options - cancellation behavior for blocking failures.
  * @returns results in aggregate order.
  */
 export async function runGates(
   gates: Gate[],
   maxActive: number,
   execute: GateExecutor,
-  observe: ResultObserver = () => {},
+  options: RunGatesOptions = {},
 ): Promise<GateResult[]> {
   validateGateGraph(gates)
   if (!Number.isSafeInteger(maxActive) || maxActive < 1) {
@@ -719,53 +745,99 @@ export async function runGates(
   const states = new Map<string, GateState>(gates.map(gate => [gate.id, 'pending']))
   const results = new Map<string, GateResult>()
   const running: RunningGate[] = []
+  const controller = new AbortController()
+  let stopCause: GateResult | undefined
+
+  const record = (result: GateResult): void => {
+    states.set(result.gate.id, result.status)
+    results.set(result.gate.id, result)
+    if (options.stopOnRequiredFailure !== true
+      || result.gate.allowFailure === true
+      || result.status === 'passed'
+      || stopCause !== undefined) return
+    stopCause = result
+    options.onStop?.(result)
+    controller.abort(new Error(`required gate ${result.gate.id} ${result.status}`))
+  }
+
+  const skip = (gate: Gate, error: string): void => {
+    record({
+      gate,
+      status: 'skipped',
+      durationMs: 0,
+      output: [],
+      exitCode: null,
+      signalCode: null,
+      error,
+    })
+  }
+
+  const skipBlocked = (): boolean => {
+    let changed = false
+    for (;;) {
+      const blocked = gates.find(gate => states.get(gate.id) === 'pending' && (gate.needs ?? []).some((id) => {
+        const state = states.get(id)
+        return state === 'failed' || state === 'cancelled' || state === 'skipped'
+      }))
+      if (blocked === undefined) return changed
+      const failedDependencies = (blocked.needs ?? []).filter((id) => {
+        const state = states.get(id)
+        return state === 'failed' || state === 'cancelled' || state === 'skipped'
+      })
+      skip(blocked, `dependency failed, cancelled, or skipped: ${failedDependencies.join(', ')}`)
+      changed = true
+    }
+  }
+
+  const skipAfterStop = (): boolean => {
+    if (stopCause === undefined) return false
+    let changed = false
+    for (const gate of gates) {
+      if (states.get(gate.id) !== 'pending') continue
+      skip(gate, `aggregate stopped after required gate ${stopCause.gate.id} ${stopCause.status}`)
+      changed = true
+    }
+    return changed
+  }
+
+  const start = (gate: Gate): void => {
+    states.set(gate.id, 'running')
+    const started = performance.now()
+    const promise = Promise.resolve()
+      .then(() => execute(gate, controller.signal))
+      .catch((cause: unknown): GateResult => ({
+        gate,
+        status: controller.signal.aborted ? 'cancelled' : 'failed',
+        durationMs: performance.now() - started,
+        output: [],
+        exitCode: null,
+        signalCode: null,
+        error: `executor rejected: ${errorMessage(cause)}`,
+      }))
+    running.push({ gate, promise })
+    console.log(`run-gates: start ${gate.label}`)
+  }
 
   for (;;) {
-    let madeProgress = false
-    while (running.length < maxActive) {
+    let madeProgress = skipBlocked()
+    madeProgress = skipAfterStop() || madeProgress
+    while (stopCause === undefined && running.length < maxActive) {
       const ready = gates.find(gate => states.get(gate.id) === 'pending' && dependenciesPassed(gate, states))
       if (ready === undefined) break
-      states.set(ready.id, 'running')
-      running.push({ gate: ready, promise: execute(ready) })
-      console.log(`run-gates: start ${ready.label}`)
+      start(ready)
       madeProgress = true
     }
 
     if (running.length === 0) {
-      let pending = gates.filter(gate => states.get(gate.id) === 'pending')
-      while (pending.length > 0) {
-        const gate = pending.find(item => (item.needs ?? []).some((id) => {
-          const state = states.get(id)
-          return state === 'failed' || state === 'skipped'
-        }))
-        if (gate === undefined) throw new Error('run-gates: validated graph stalled without a failed dependency.')
-        const failedDeps = (gate.needs ?? []).filter((id) => {
-          const state = states.get(id)
-          return state === 'failed' || state === 'skipped'
-        })
-        const result: GateResult = {
-          gate,
-          status: 'skipped',
-          durationMs: 0,
-          output: [],
-          exitCode: null,
-          signalCode: null,
-          error: `dependency failed or skipped: ${failedDeps.join(', ')}`,
-        }
-        states.set(gate.id, 'skipped')
-        results.set(gate.id, result)
-        observe(result)
-        pending = pending.filter(item => item !== gate)
-      }
+      const pending = gates.filter(gate => states.get(gate.id) === 'pending')
+      if (pending.length > 0) throw new Error('run-gates: validated graph stalled without a failed dependency.')
       break
     }
 
     if (!madeProgress) {
       const settled = await Promise.race(running.map(async item => ({ item, result: await item.promise })))
       running.splice(running.indexOf(settled.item), 1)
-      states.set(settled.item.gate.id, settled.result.status)
-      results.set(settled.item.gate.id, settled.result)
-      observe(settled.result)
+      record(settled.result)
     }
   }
 
@@ -776,6 +848,10 @@ export async function runGates(
   })
 }
 
+function errorMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause)
+}
+
 function dependenciesPassed(gate: Gate, states: Map<string, GateState>): boolean {
   return (gate.needs ?? []).every(id => states.get(id) === 'passed')
 }
@@ -783,42 +859,88 @@ function dependenciesPassed(gate: Gate, states: Map<string, GateState>): boolean
 /**
  * Execute one gate through the real shell-free child-process boundary.
  * @param gate - command and scheduler environment to execute.
+ * @param cancelSignal - aggregate cancellation that freezes and force-kills the POSIX execution, or
+ * force-kills the Windows tree; commands must keep descendants connected until cancellation.
  * @returns the complete process outcome.
  */
-export async function runGate(gate: Gate): Promise<GateResult> {
+export async function runGate(gate: Gate, cancelSignal?: AbortSignal): Promise<GateResult> {
   const started = performance.now()
   const output: GateOutputChunk[] = []
-  let spawnError: string | undefined
+  if (cancelSignal?.aborted) {
+    return {
+      gate,
+      status: 'cancelled',
+      durationMs: performance.now() - started,
+      output,
+      exitCode: null,
+      signalCode: null,
+      error: `cancelled before spawn: ${errorMessage(cancelSignal.reason)}`,
+    }
+  }
 
-  const outcome = await new Promise<{
-    exitCode: number | null
-    signalCode: NodeJS.Signals | null
-  }>((resolveExit) => {
-    const child = spawn(gate.command, gate.args, {
-      cwd: root,
-      env: { ...process.env, ...gate.env },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
-    child.stdout.setEncoding('utf8')
-    child.stderr.setEncoding('utf8')
-    child.stdout.on('data', (chunk: string) => {
-      output.push({ stream: 'stdout', text: chunk })
-    })
-    child.stderr.on('data', (chunk: string) => {
-      output.push({ stream: 'stderr', text: chunk })
-    })
-    child.on('error', (error) => {
-      spawnError = `failed to start command: ${error.message}`
-      resolveExit({ exitCode: null, signalCode: null })
-    })
-    child.on('close', (exitCode, signalCode) => {
-      resolveExit({ exitCode, signalCode })
-    })
-    child.stdin.end()
+  const child = spawn(gate.command, gate.args, {
+    cwd: root,
+    env: { ...process.env, ...gate.env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: process.platform !== 'win32',
+    windowsHide: true,
   })
-  const { exitCode, signalCode } = outcome
+  child.stdout.setEncoding('utf8')
+  child.stderr.setEncoding('utf8')
+  child.stdout.on('data', (chunk: string) => {
+    output.push({ stream: 'stdout', text: chunk })
+  })
+  child.stderr.on('data', (chunk: string) => {
+    output.push({ stream: 'stderr', text: chunk })
+  })
+  let spawnError: string | undefined
+  let childSettled = false
+  const outcome = new Promise<{ exitCode: number | null; signalCode: NodeJS.Signals | null }>((resolveOutcome) => {
+    const settle = (exitCode: number | null, signalCode: NodeJS.Signals | null): void => {
+      if (childSettled) return
+      childSettled = true
+      resolveOutcome({ exitCode, signalCode })
+    }
+    child.once('error', (error) => {
+      spawnError = `failed to start command: ${error.message}`
+      settle(null, null)
+    })
+    child.once('close', settle)
+  })
 
-  const status: GateResultStatus = exitCode === 0 && signalCode === null && spawnError === undefined ? 'passed' : 'failed'
+  let cancellation: Promise<string | undefined> | undefined
+  const cancellationStarted = Promise.withResolvers<void>()
+  const onCancel = (): void => {
+    if (cancellation !== undefined) return
+    cancellation = terminateGateProcessTree(child).then(
+      () => undefined,
+      (cause: unknown) => {
+        forceDirectChildExit(child)
+        return errorMessage(cause)
+      },
+    )
+    cancellationStarted.resolve()
+  }
+  cancelSignal?.addEventListener('abort', onCancel, { once: true })
+  if (cancelSignal?.aborted) onCancel()
+
+  const first = cancellation === undefined
+    ? await Promise.race([
+      outcome.then(() => 'outcome' as const),
+      cancellationStarted.promise.then(() => 'cancellation' as const),
+    ])
+    : 'cancellation'
+  let cancellationError: string | undefined
+  if (first === 'cancellation' || cancellation !== undefined) {
+    cancellationError = await cancellation
+  }
+  const { exitCode, signalCode } = await outcome
+  cancelSignal?.removeEventListener('abort', onCancel)
+
+  const wasCancelled = cancellation !== undefined
+  const status: GateResultStatus = wasCancelled
+    ? 'cancelled'
+    : exitCode === 0 && signalCode === null && spawnError === undefined ? 'passed' : 'failed'
   const result: GateResult = {
     gate,
     status,
@@ -827,8 +949,287 @@ export async function runGate(gate: Gate): Promise<GateResult> {
     exitCode,
     signalCode,
   }
-  if (spawnError !== undefined) result.error = spawnError
+  const errors = [
+    ...wasCancelled ? [`cancelled: ${errorMessage(cancelSignal?.reason)}`] : [],
+    ...spawnError === undefined ? [] : [spawnError],
+    ...cancellationError === undefined ? [] : [`process tree cleanup failed: ${cancellationError}`],
+  ]
+  if (errors.length > 0) result.error = errors.join('; ')
   return result
+}
+
+async function terminateGateProcessTree(child: ChildProcess): Promise<void> {
+  const pid = child.pid
+  if (pid === undefined || pid <= 0) throw new Error('child process has no usable pid')
+  if (process.platform === 'win32') {
+    terminateWindowsProcessTree(pid)
+    return
+  }
+  if (process.platform !== 'darwin' && process.platform !== 'linux') {
+    throw new Error(`POSIX gate cleanup is unsupported on ${process.platform}`)
+  }
+
+  const captured = new Map<number, GateProcessIdentity>()
+  try {
+    await freezePosixExecution(pid, captured)
+  } catch (cause) {
+    const forceError = await forcePosixExecution(pid, [...captured.values()])
+    throw new Error([
+      `cannot freeze process group ${pid} and its descendants: ${errorMessage(cause)}`,
+      ...forceError === undefined ? [] : [`emergency process cleanup failed: ${forceError}`],
+    ].join('; '))
+  }
+
+  const forceError = await forcePosixExecution(pid, [...captured.values()])
+  if (forceError !== undefined) throw new Error(forceError)
+}
+
+interface PosixProcessEntry extends GateProcessIdentity {
+  parentPid: number
+  processGroupId: number
+  state: string
+}
+
+interface GateProcessIdentity {
+  pid: number
+  started: string
+}
+
+function readPosixProcessTable(): PosixProcessEntry[] {
+  const result = spawnSync('/bin/ps', ['-axo', 'pid=,ppid=,pgid=,state=,lstart='], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: PROCESS_TREE_CONFIRM_MS,
+  })
+  if (result.error !== undefined) throw new Error(`/bin/ps failed: ${result.error.message}`)
+  if (result.status !== 0) {
+    const diagnostic = result.stderr.trim()
+    throw new Error(`/bin/ps exited ${String(result.status)}${diagnostic === '' ? '' : `: ${diagnostic}`}`)
+  }
+
+  return result.stdout.split('\n').flatMap((line) => {
+    if (line.trim() === '') return []
+    const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.+?)\s*$/.exec(line)
+    if (match?.[1] === undefined
+      || match[2] === undefined
+      || match[3] === undefined
+      || match[4] === undefined
+      || match[5] === undefined) {
+      throw new Error(`cannot parse /bin/ps row: ${JSON.stringify(line)}`)
+    }
+    const pid = Number(match[1])
+    const parentPid = Number(match[2])
+    const processGroupId = Number(match[3])
+    if (![pid, parentPid, processGroupId].every(Number.isSafeInteger)) {
+      throw new Error(`invalid numeric identity in /bin/ps row: ${JSON.stringify(line)}`)
+    }
+    return [{ pid, parentPid, processGroupId, state: match[4], started: match[5] }]
+  })
+}
+
+function executionEntries(
+  processGroupId: number,
+  captured: ReadonlyMap<number, GateProcessIdentity>,
+  entries: readonly PosixProcessEntry[],
+): PosixProcessEntry[] {
+  const byParent = new Map<number, PosixProcessEntry[]>()
+  for (const entry of entries) {
+    const children = byParent.get(entry.parentPid) ?? []
+    children.push(entry)
+    byParent.set(entry.parentPid, children)
+  }
+
+  const seeds = entries.filter((entry) => {
+    const identity = captured.get(entry.pid)
+    return entry.processGroupId === processGroupId || identity?.started === entry.started
+  })
+  const visited = new Set<number>()
+  const execution: PosixProcessEntry[] = []
+  const visit = (parentPid: number): void => {
+    for (const child of byParent.get(parentPid) ?? []) {
+      if (visited.has(child.pid)) continue
+      visited.add(child.pid)
+      execution.push(child)
+      visit(child.pid)
+    }
+  }
+  for (const seed of seeds) {
+    if (!visited.has(seed.pid)) {
+      visited.add(seed.pid)
+      execution.push(seed)
+    }
+    visit(seed.pid)
+  }
+  return execution
+}
+
+async function freezePosixExecution(
+  processGroupId: number,
+  captured: Map<number, GateProcessIdentity>,
+): Promise<void> {
+  signalProcessGroup(processGroupId, 'SIGSTOP')
+  const deadline = performance.now() + PROCESS_TREE_FREEZE_MS
+
+  for (;;) {
+    const entries = readPosixProcessTable()
+    const execution = executionEntries(processGroupId, captured, entries)
+      .filter(entry => !/^[ZXx]/.test(entry.state))
+    let discovered = false
+    for (const entry of execution) {
+      const current = captured.get(entry.pid)
+      if (current?.started === entry.started) continue
+      captured.set(entry.pid, { pid: entry.pid, started: entry.started })
+      discovered = true
+    }
+
+    const unstopped = execution
+      .filter(entry => !/^[Tt]/.test(entry.state))
+      .map(({ pid, started }) => ({ pid, started }))
+    if (unstopped.length > 0) signalIdentities(unstopped, 'SIGSTOP')
+    if (!discovered && unstopped.length === 0) return
+
+    const remaining = deadline - performance.now()
+    if (remaining <= 0) {
+      throw new Error(`process tree did not reach a stopped fixed point within ${PROCESS_TREE_FREEZE_MS}ms`)
+    }
+    await delay(Math.min(PROCESS_TREE_POLL_MS, remaining))
+  }
+}
+
+function liveIdentities(
+  identities: readonly GateProcessIdentity[],
+  entries: readonly PosixProcessEntry[],
+): GateProcessIdentity[] {
+  const byPid = new Map(entries.map(entry => [entry.pid, entry]))
+  return identities.filter((identity) => {
+    const current = byPid.get(identity.pid)
+    return current?.started === identity.started && !/^[ZXx]/.test(current.state)
+  })
+}
+
+function presentIdentities(
+  identities: readonly GateProcessIdentity[],
+  entries: readonly PosixProcessEntry[],
+): GateProcessIdentity[] {
+  const byPid = new Map(entries.map(entry => [entry.pid, entry]))
+  return identities.filter(identity => byPid.get(identity.pid)?.started === identity.started)
+}
+
+function signalIdentities(identities: readonly GateProcessIdentity[], signal: NodeJS.Signals): void {
+  const failures: string[] = []
+  for (const identity of identities) {
+    try {
+      process.kill(identity.pid, signal)
+    } catch (cause) {
+      const code = (cause as NodeJS.ErrnoException).code
+      if (code === 'ESRCH') continue
+      if (code === 'EPERM') {
+        try {
+          if (liveIdentities([identity], readPosixProcessTable()).length === 0) continue
+        } catch (inspectionCause) {
+          failures.push(`cannot verify captured process ${identity.pid}: ${errorMessage(inspectionCause)}`)
+          continue
+        }
+      }
+      failures.push(`cannot send ${signal} to captured process ${identity.pid}: ${errorMessage(cause)}`)
+    }
+  }
+  if (failures.length > 0) throw new Error(failures.join('; '))
+}
+
+function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal)
+  } catch (cause) {
+    const code = (cause as NodeJS.ErrnoException).code
+    if (code === 'ESRCH') return
+    if (code === 'EPERM') {
+      const groupAlive = readPosixProcessTable()
+        .some(entry => entry.processGroupId === pid && !/^[ZXx]/.test(entry.state))
+      if (!groupAlive) return
+    }
+    throw new Error(`cannot send ${signal} to process group ${pid}: ${errorMessage(cause)}`)
+  }
+}
+
+async function waitForPosixExecutionExit(
+  processGroupId: number,
+  descendants: readonly GateProcessIdentity[],
+  timeoutMs: number,
+): Promise<boolean> {
+  const deadline = performance.now() + timeoutMs
+  for (;;) {
+    const entries = readPosixProcessTable()
+    const groupAlive = entries.some(entry => entry.processGroupId === processGroupId && !/^[ZXx]/.test(entry.state))
+    if (!groupAlive && presentIdentities(descendants, entries).length === 0) return true
+    const remaining = deadline - performance.now()
+    if (remaining <= 0) return false
+    await delay(Math.min(PROCESS_TREE_POLL_MS, remaining))
+  }
+}
+
+async function forcePosixExecution(
+  processGroupId: number,
+  captured: readonly GateProcessIdentity[],
+): Promise<string | undefined> {
+  const failures: string[] = []
+  let forceTargets: GateProcessIdentity[] = []
+  try {
+    forceTargets = liveIdentities(captured, readPosixProcessTable())
+  } catch (cause) {
+    failures.push(`cannot inspect captured processes before SIGKILL: ${errorMessage(cause)}`)
+  }
+  try {
+    signalProcessGroup(processGroupId, 'SIGKILL')
+  } catch (cause) {
+    failures.push(errorMessage(cause))
+  }
+  try {
+    signalIdentities(forceTargets, 'SIGKILL')
+  } catch (cause) {
+    failures.push(errorMessage(cause))
+  }
+  try {
+    if (await waitForPosixExecutionExit(processGroupId, captured, PROCESS_TREE_CONFIRM_MS)) return undefined
+    failures.unshift(`process group ${processGroupId} or a captured descendant remained after SIGKILL`)
+  } catch (cause) {
+    failures.unshift(`cannot confirm process cleanup: ${errorMessage(cause)}`)
+  }
+  return failures.join('; ')
+}
+
+function terminateWindowsProcessTree(pid: number): void {
+  const windowsDirectory = [process.env.SystemRoot, process.env.windir]
+    .find(directory => directory !== undefined && /^[a-z]:[/\\]/i.test(directory) && win32.isAbsolute(directory))
+  if (windowsDirectory === undefined) {
+    throw new Error('SystemRoot or windir must name an absolute Windows directory')
+  }
+  const taskkill = win32.join(windowsDirectory, 'System32', 'taskkill.exe')
+  const result = spawnSync(taskkill, ['/PID', String(pid), '/T', '/F'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'ignore', 'pipe'],
+    timeout: PROCESS_TREE_CONFIRM_MS,
+    windowsHide: true,
+  })
+  if (result.error !== undefined) {
+    throw new Error(`taskkill could not terminate process tree ${pid}: ${result.error.message}`)
+  }
+  if (result.status !== 0) {
+    const diagnostic = result.stderr.trim()
+    throw new Error(
+      `taskkill could not terminate process tree ${pid}: exit ${String(result.status)}${diagnostic === '' ? '' : `: ${diagnostic}`}`,
+    )
+  }
+}
+
+function forceDirectChildExit(child: ChildProcess): void {
+  try {
+    child.kill('SIGKILL')
+  } catch {
+    // The cleanup error already carries the authoritative failure.
+  }
+  child.stdout?.destroy()
+  child.stderr?.destroy()
 }
 
 /**
@@ -865,11 +1266,12 @@ function printResult(result: GateResult): void {
 function printSummary(results: GateResult[], durationMs: number): void {
   const passed = results.filter(result => result.status === 'passed').length
   const failed = results.filter(result => result.status === 'failed').length
+  const cancelled = results.filter(result => result.status === 'cancelled').length
   const skipped = results.filter(result => result.status === 'skipped').length
   const seconds = (durationMs / 1000).toFixed(2)
-  console.log(`\nrun-gates: ${passed} passed, ${failed} failed, ${skipped} skipped in ${seconds}s.`)
+  console.log(`\nrun-gates: ${passed} passed, ${failed} failed, ${cancelled} cancelled, ${skipped} skipped in ${seconds}s.`)
 
-  const unsuccessful = results.filter(result => result.status === 'failed' || result.status === 'skipped')
+  const unsuccessful = results.filter(result => result.status !== 'passed')
   if (unsuccessful.length === 0) return
 
   console.error('run-gates: unsuccessful gates:')

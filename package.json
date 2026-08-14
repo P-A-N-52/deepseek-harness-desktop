@@ -49,7 +49,6 @@
     "test:gui": "vitest run packages/client packages/host",
     "check:all": "tsx scripts/run-gates.ts check-all",
     "check:ci": "tsx scripts/run-gates.ts ci-primary",
-    "check:ci:linux-primary": "tsx scripts/run-gates.ts ci-linux-primary",
     "check:ci:static": "tsx scripts/run-gates.ts ci-static",
     "check:ci:lint:contracts-ready": "tsx scripts/run-gates.ts ci-lint-contracts-ready",
     "check:ci:coverage": "tsx scripts/run-gates.ts ci-coverage",

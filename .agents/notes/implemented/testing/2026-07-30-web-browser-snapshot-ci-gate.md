@@ -10,11 +10,11 @@ The [keyless web browser e2e lane](2026-07-24-web-gui-browser-e2e-lane.md) compa
 
 ## Decision
 
-The `linux` lane in [ci.yml](../../../../.github/workflows/ci.yml) runs the full web browser replay/compare suite on every primary CI event. `scripts/run-gates.ts` includes `test:web:built` in `ci-linux-primary` and explicitly supplies `DSH_SNAPSHOT=replay`; CI never uses `record` or `refresh`, so a golden mismatch fails rather than rewriting an expected output on the runner.
+The `linux` lane in [ci.yml](../../../../.github/workflows/ci.yml) runs the full web browser replay/compare suite on every primary CI event. It first runs the general `check:ci` aggregate, then installs Chromium and invokes `test:web:built` in a separate step with `DSH_SNAPSHOT=replay`; CI never uses `record` or `refresh`, so a golden mismatch fails rather than rewriting an expected output on the runner. The general snapshot config excludes `apps/web`, making the dedicated browser config the only process that owns those files.
 
-The Linux lane owns the repository build and then runs the browser suite against the current `apps/web/dist` and package `lib/` outputs. It installs the lockfile-selected Chromium with its hosted system dependencies before the gate. The browser checks remain POSIX-oriented; the native Windows lane does not duplicate Chromium provisioning.
+The Linux lane owns the repository build and then runs the browser suite against the current `apps/web/dist` and package `lib/` outputs. Chromium provisioning occurs only after the general gates succeed, and each phase has its own workflow timeout so a stalled browser run is attributed to the browser step. The browser checks remain POSIX-oriented; the native Windows lane does not duplicate Chromium provisioning.
 
-Local `pnpm run test:web` continues to build before executing the suite, and `test:web:built` remains the entry point for existing build artifacts. Developers run `DSH_SNAPSHOT=refresh pnpm run test:web` only for an intentional user-visible change, review the resulting expected-output diff, and then replay it without writes.
+Local `pnpm run test:web` continues to build before executing the suite, and `test:web:built` remains the entry point for existing build artifacts. The comprehensive `check:all` aggregate schedules both the general and Web owners after its shared build, so splitting their inventories does not reduce local coverage. Developers run `DSH_SNAPSHOT=refresh pnpm run test:web` only for an intentional user-visible change, review the resulting expected-output diff, and then replay it without writes.
 
 The required aggregate depends on the Linux lane, so a browser mismatch blocks the same stable `all checks passed` result as the rest of the primary inventory. The [GitHub-hosted CI note](../process/2026-08-14-independent-desktop-github-hosted-ci.md) records the current runner and aggregate topology.
 

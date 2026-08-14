@@ -149,6 +149,7 @@ describe('CI workflow', () => {
     expect(linux).toMatchObject({
       name: 'linux / node 24',
       'runs-on': 'ubuntu-latest',
+      'timeout-minutes': 110,
       env: {
         DSH_ARCHIVE_BASE_REF: '${{ github.event.pull_request.base.sha || github.event.before || github.sha }}',
         DSH_GATE_CONCURRENCY: '2',
@@ -165,15 +166,32 @@ describe('CI workflow', () => {
         'persist-credentials': false,
       },
     })
-    expect(linuxSteps.find(step => step.name === 'Install Playwright Chromium and system dependencies')).toMatchObject({
+    const linuxPrimary = linuxSteps.find(step => step.name === 'Run Linux primary gates')
+    const playwrightInstall = linuxSteps.find(step => step.name === 'Install Playwright Chromium and system dependencies')
+    const webSnapshot = linuxSteps.find(step => step.name === 'Run Web browser snapshot')
+    if (linuxPrimary === undefined || playwrightInstall === undefined || webSnapshot === undefined) {
+      throw new TypeError('Linux CI must sequence primary gates, Chromium provisioning, and Web replay')
+    }
+    expect(playwrightInstall).toMatchObject({
       run: 'pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install --with-deps chromium',
     })
     expect(linuxSteps.find(step => step.name === 'Prepare bubblewrap')).toMatchObject({
       run: 'bash scripts/prepare-ci-bubblewrap.sh',
     })
-    expect(linuxSteps.find(step => step.name === 'Run Linux primary gates')).toMatchObject({
-      run: 'pnpm run check:ci:linux-primary',
+    expect(linuxPrimary).toMatchObject({
+      'timeout-minutes': 50,
+      run: 'pnpm run check:ci',
     })
+    expect(webSnapshot).toMatchObject({
+      'timeout-minutes': 30,
+      env: { DSH_SNAPSHOT: 'replay' },
+      run: 'pnpm run test:web:built',
+    })
+    expect(linuxSteps.indexOf(linuxPrimary)).toBeLessThan(linuxSteps.indexOf(playwrightInstall))
+    expect(linuxSteps.indexOf(playwrightInstall)).toBeLessThan(linuxSteps.indexOf(webSnapshot))
+    expect(linux['timeout-minutes']).toBeGreaterThan(
+      Number(linuxPrimary['timeout-minutes']) + Number(webSnapshot['timeout-minutes']),
+    )
 
     expect(nodeCompat).toMatchObject({
       'runs-on': 'ubuntu-latest',
@@ -198,6 +216,10 @@ describe('CI workflow', () => {
     expect(windowsSteps.find(step => step.name === 'Install (immutable)')).toMatchObject({
       shell: 'pwsh',
       run: 'pnpm install --frozen-lockfile',
+    })
+    expect(windowsSteps.find(step => step.name === 'Verify native Windows gate process lifecycle')).toMatchObject({
+      shell: 'pwsh',
+      run: 'pnpm exec vitest run scripts/run-gates.spec.ts',
     })
     expect(windowsSteps.find(step => step.name === 'Run native Windows blocking gates')).toMatchObject({
       shell: 'pwsh',

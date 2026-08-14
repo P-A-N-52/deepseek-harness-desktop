@@ -414,6 +414,18 @@ describe('workdir derivation and signal forwarding', () => {
     expect(spec?.graceMs).toBe(5_000)
   })
 
+  it('passes a deployment-supplied ripgrep executable to the subprocess seam', async () => {
+    const { ctx, subprocess } = await setup({ config: { ripgrepPath: process.execPath } })
+    subprocess.handler = () => runResult('', { exitCode: 1 })
+    await call(ctx, 'grep', { pattern: 'needle' })
+    expect(subprocess.spawns[0]?.argv).toEqual([
+      process.execPath,
+      '--no-config',
+      '--json',
+      '--regexp=needle',
+    ])
+  })
+
   it('defaults the stderr tail budget and grace period when the config omits them', async () => {
     const { ctx, subprocess } = await setup()
     subprocess.handler = () => runResult('', { exitCode: 1 })

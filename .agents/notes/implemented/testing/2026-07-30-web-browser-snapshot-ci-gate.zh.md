@@ -10,11 +10,11 @@ Status: implemented
 
 ## 决策
 
-[ci.yml](../../../../.github/workflows/ci.yml) 中的 `linux` 泳道会在每个主 CI 事件中运行完整 Web 浏览器 replay/compare 套件。`scripts/run-gates.ts` 将 `test:web:built` 纳入 `ci-linux-primary`，并明确提供 `DSH_SNAPSHOT=replay`；CI 从不使用 `record` 或 `refresh`，因此 golden 不匹配会失败，而不会在 runner 上改写预期输出。
+[ci.yml](../../../../.github/workflows/ci.yml) 中的 `linux` 泳道会在每个主 CI 事件中运行完整 Web 浏览器 replay/compare 套件。它先运行通用 `check:ci` 聚合，再安装 Chromium，并在单独步骤中用 `DSH_SNAPSHOT=replay` 调用 `test:web:built`；CI 从不使用 `record` 或 `refresh`，因此 golden 不匹配会失败，而不会在 runner 上改写预期输出。通用快照配置排除 `apps/web`，所以专用浏览器配置是这些文件的唯一所有者。
 
-Linux 泳道负责仓库构建，然后针对当前 `apps/web/dist` 和包 `lib/` 输出运行浏览器套件。它会在门禁前安装锁文件选定的 Chromium 及其托管系统依赖。浏览器检查仍面向 POSIX；原生 Windows 泳道不重复 Chromium 设置。
+Linux 泳道负责仓库构建，然后针对当前 `apps/web/dist` 和包 `lib/` 输出运行浏览器套件。只有通用门禁成功后才会安装 Chromium，而且两个阶段分别设置工作流超时，因此浏览器运行若停滞会归因到浏览器步骤。浏览器检查仍面向 POSIX；原生 Windows 泳道不重复 Chromium 设置。
 
-本地 `pnpm run test:web` 仍会在执行套件前构建，`test:web:built` 仍是已有构建产物的入口。开发者只会针对有意的用户可见变更运行 `DSH_SNAPSHOT=refresh pnpm run test:web`，评审随之产生的预期输出 diff，再以无写入的 replay 复验。
+本地 `pnpm run test:web` 仍会在执行套件前构建，`test:web:built` 仍是已有构建产物的入口。综合 `check:all` 聚合会在共享构建之后同时调度通用与 Web 两个所有者，因此拆分清单不会减少本地覆盖。开发者只会针对有意的用户可见变更运行 `DSH_SNAPSHOT=refresh pnpm run test:web`，评审随之产生的预期输出 diff，再以无写入的 replay 复验。
 
 必需聚合流程依赖 Linux 泳道，因此浏览器不匹配会与其余主清单一样阻断稳定的 `all checks passed` 结果。[GitHub 托管 CI Note](../process/2026-08-14-independent-desktop-github-hosted-ci.md)记录当前的 runner 和聚合拓扑。
 

@@ -32,7 +32,7 @@ Inter-tier discipline: **each tier tests its own layer, upper tiers never re-tes
 | Scenario | Command | Content | When to run |
 |---|---|---|---|
 | Baseline | `pnpm run test:gui` | Tier 1+2 vitest (`packages/client packages/host`), seconds-fast, no browser, no server | Casually, after touching any GUI source |
-| Semantic snapshot | `DSH_EXAMPLE_MODE=lib pnpm run test:snapshot` | Keyless assembled-application semantics plus the repo's transport-specific expected outputs | After a human-visible GUI change; before delivery |
+| Non-browser snapshot | `DSH_EXAMPLE_MODE=lib pnpm run test:snapshot` | Keyless protocol, CLI, and backend expected outputs; Web UI files belong only to the browser lane | After changing a non-browser external behavior; before delivery |
 | Browser end-to-end | `pnpm run test:web` | Rebuilds the front-end dist first, then runs the tier-3 browser set: the two-level smoke (fixture level + real-host level self-skip) plus the keyless replayed e2e scenarios (`DSH_SNAPSHOT=record`/`refresh` re-record fixtures / rewrite goldens) | After touching the build surface/boot/carriage; before delivery |
 | Browser expected-output gate | `DSH_SNAPSHOT=replay pnpm run test:web:built` | Reuses CI-built artifacts and compares every committed browser golden without writing | Every Linux pull request |
 | Gate | `pnpm run test:coverage` | The repo-wide gate (host and client GUI packages included, except annotated browser-grade exclusions) | The PR window |

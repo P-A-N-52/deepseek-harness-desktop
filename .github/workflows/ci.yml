@@ -21,7 +21,7 @@ jobs:
   linux:
     name: linux / node 24
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 110
     env:
       DSH_ARCHIVE_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
       DSH_GATE_CONCURRENCY: '2'
@@ -49,14 +49,21 @@ jobs:
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright Chromium and system dependencies
-        run: pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install --with-deps chromium
-
       - name: Prepare bubblewrap
         run: bash scripts/prepare-ci-bubblewrap.sh
 
       - name: Run Linux primary gates
-        run: pnpm run check:ci:linux-primary
+        timeout-minutes: 50
+        run: pnpm run check:ci
+
+      - name: Install Playwright Chromium and system dependencies
+        run: pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install --with-deps chromium
+
+      - name: Run Web browser snapshot
+        timeout-minutes: 30
+        env:
+          DSH_SNAPSHOT: replay
+        run: pnpm run test:web:built
 
   node-compat:
     name: node ${{ matrix.node }} / compatibility
@@ -138,6 +145,10 @@ jobs:
       - name: Install (immutable)
         shell: pwsh
         run: pnpm install --frozen-lockfile
+
+      - name: Verify native Windows gate process lifecycle
+        shell: pwsh
+        run: pnpm exec vitest run scripts/run-gates.spec.ts
 
       - name: Run native Windows blocking gates
         shell: pwsh

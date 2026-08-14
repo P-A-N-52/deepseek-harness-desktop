@@ -62,4 +62,20 @@ describe('dsh-tool-fs-search real-load-path guard', () => {
       ripgrepPath: 'bin/rg',
     })).rejects.toThrow('ripgrepPath must be a non-empty absolute path')
   })
+
+  it('rejects a deployment-supplied directory in place of the ripgrep executable', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(LocalSubprocessRuntime)
+
+    const loader = Object.create(Loader.prototype) as Loader
+    const unwrapped = loader.unwrapExports(toolFsSearch) as Parameters<Context['plugin']>[0]
+    const deploymentDirectory = process.cwd()
+    await expect(ctx.plugin(unwrapped, {
+      sampleOverCapGlobResults: true,
+      ripgrepPath: deploymentDirectory,
+    })).rejects.toThrow(`tool-fs-search: ripgrepPath is not an executable file: ${deploymentDirectory}`)
+    expect(ctx.tools.schemas()).toHaveLength(0)
+  })
 })

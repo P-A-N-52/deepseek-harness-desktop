@@ -2,6 +2,7 @@ import { availableParallelism } from 'node:os'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { defineConfig } from 'vitest/config'
 import { standardDecoratorPlugin, vitestExecArgv } from './vitest.shared.ts'
+import { SNAPSHOT_TEST_INCLUDES } from './scripts/snapshot-inventories.ts'
 
 const DEFAULT_SNAPSHOT_MAX_CONCURRENCY = 5
 
@@ -44,14 +45,7 @@ export default defineConfig({
   test: {
     execArgv: vitestExecArgv,
     setupFiles: ['./scripts/test-invariants.ts'],
-    include: [
-      'scripts/**/*.snapshot.ts',
-      // The assembled Web snapshot executes generated client bundles; source
-      // mode remains the zero-build path, while lib mode requires a prior build.
-      ...(process.env.DSH_EXAMPLE_MODE === 'lib' ? ['apps/web/tests/**/*.snapshot.ts'] : []),
-      'apps/cli/tests/**/*.snapshot.ts',
-      'examples/*/tests/**/*.snapshot.ts',
-    ],
+    include: SNAPSHOT_TEST_INCLUDES,
     // Replay never writes committed outputs and every scenario owns its
     // mutable runtime state (the subprocess suites use a unique temp dir and
     // fixture set per scenario), so replay runs the snapshot files in

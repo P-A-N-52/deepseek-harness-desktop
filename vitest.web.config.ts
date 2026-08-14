@@ -1,6 +1,7 @@
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { defineConfig } from 'vitest/config'
 import { standardDecoratorPlugin, vitestExecArgv } from './vitest.shared.ts'
+import { WEB_SNAPSHOT_TEST_INCLUDES } from './scripts/snapshot-inventories.ts'
 
 // Web browser lane: real host entry points, built-client interaction snapshots,
 // and replayed keyless e2e scenarios outside the unit/e2e includes. Linux PR CI
@@ -23,10 +24,7 @@ export default defineConfig({
   ],
   test: {
     execArgv: vitestExecArgv,
-    include: [
-      'apps/web/tests/**/*.e2e.ts',
-      'apps/web/tests/**/*.snapshot.ts',
-    ],
+    include: WEB_SNAPSHOT_TEST_INCLUDES,
     // Browser boot + real-model turns are slow; files share one browser, run serial.
     testTimeout: 180_000,
     hookTimeout: 120_000,

@@ -39,6 +39,40 @@ async function lockfile(
   return path
 }
 
+interface DeployedPluginFixtureOptions {
+  pluginManifest?: Record<string, unknown>
+  extraManifests?: Record<string, Record<string, unknown>>
+  packages?: Record<string, unknown>
+  snapshots?: Record<string, unknown>
+}
+
+async function deployedPluginFixture(
+  options: DeployedPluginFixtureOptions = {},
+): Promise<{ root: string; lock: string }> {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-desktop-sbom-'))
+  roots.push(root)
+  await manifest(root, {
+    name: 'desktop-runtime',
+    version: '1.2.3',
+    dependencies: { plugin: '1.0.0' },
+  })
+  await manifest(join(root, 'node_modules/plugin'), {
+    name: 'plugin',
+    version: '1.0.0',
+    ...options.pluginManifest,
+  })
+  for (const [name, value] of Object.entries(options.extraManifests ?? {})) {
+    await manifest(join(root, 'node_modules', name), value)
+  }
+  const lock = await lockfile(root, {
+    'plugin@1.0.0': { resolution: { integrity: sri('plugin') } },
+    ...options.packages,
+  }, options.snapshots ?? {
+    'plugin@1.0.0': {},
+  })
+  return { root, lock }
+}
+
 function seaPackerLock(patchHash: string, integrity = sri('pkg')): Record<string, unknown> {
   return {
     lockfileVersion: '9.0',
@@ -189,25 +223,10 @@ describe('Desktop release preparation', () => {
   })
 
   it('rejects a physical deployed package with no frozen-lock resolution', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'dsh-desktop-sbom-'))
-    roots.push(root)
-    await manifest(root, {
-      name: 'desktop-runtime',
-      version: '1.2.3',
-      dependencies: { plugin: '1.0.0' },
-    })
-    await manifest(join(root, 'node_modules/plugin'), {
-      name: 'plugin',
-      version: '1.0.0',
-    })
-    await manifest(join(root, 'node_modules/unmapped'), {
-      name: 'unmapped',
-      version: '1.0.0',
-    })
-    const lock = await lockfile(root, {
-      'plugin@1.0.0': { resolution: { integrity: sri('plugin') } },
-    }, {
-      'plugin@1.0.0': {},
+    const { root, lock } = await deployedPluginFixture({
+      extraManifests: {
+        unmapped: { name: 'unmapped', version: '1.0.0' },
+      },
     })
 
     expect(() => desktopNpmBom('aarch64-apple-darwin', root, lock))
@@ -215,27 +234,17 @@ describe('Desktop release preparation', () => {
   })
 
   it('rejects a mapped physical package outside the runtime dependency closure', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'dsh-desktop-sbom-'))
-    roots.push(root)
-    await manifest(root, {
-      name: 'desktop-runtime',
-      version: '1.2.3',
-      dependencies: { plugin: '1.0.0' },
-    })
-    await manifest(join(root, 'node_modules/plugin'), {
-      name: 'plugin',
-      version: '1.0.0',
-    })
-    await manifest(join(root, 'node_modules/unreferenced'), {
-      name: 'unreferenced',
-      version: '1.0.0',
-    })
-    const lock = await lockfile(root, {
-      'plugin@1.0.0': { resolution: { integrity: sri('plugin') } },
-      'unreferenced@1.0.0': { resolution: { integrity: sri('unreferenced') } },
-    }, {
-      'plugin@1.0.0': {},
-      'unreferenced@1.0.0': {},
+    const { root, lock } = await deployedPluginFixture({
+      extraManifests: {
+        unreferenced: { name: 'unreferenced', version: '1.0.0' },
+      },
+      packages: {
+        'unreferenced@1.0.0': { resolution: { integrity: sri('unreferenced') } },
+      },
+      snapshots: {
+        'plugin@1.0.0': {},
+        'unreferenced@1.0.0': {},
+      },
     })
 
     expect(() => desktopNpmBom('aarch64-apple-darwin', root, lock))
@@ -254,23 +263,12 @@ describe('Desktop release preparation', () => {
   })
 
   it('rejects an ambiguous pnpm snapshot for a deployed package instance', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'dsh-desktop-sbom-'))
-    roots.push(root)
-    await manifest(root, {
-      name: 'desktop-runtime',
-      version: '1.2.3',
-      dependencies: { plugin: '1.0.0' },
-    })
-    await manifest(join(root, 'node_modules/plugin'), {
-      name: 'plugin',
-      version: '1.0.0',
-      license: 'MIT',
-    })
-    const lock = await lockfile(root, {
-      'plugin@1.0.0': { resolution: { integrity: sri('plugin') } },
-    }, {
-      'plugin@1.0.0(peer-a@1.0.0)': {},
-      'plugin@1.0.0(peer-b@1.0.0)': {},
+    const { root, lock } = await deployedPluginFixture({
+      pluginManifest: { license: 'MIT' },
+      snapshots: {
+        'plugin@1.0.0(peer-a@1.0.0)': {},
+        'plugin@1.0.0(peer-b@1.0.0)': {},
+      },
     })
 
     expect(() => desktopNpmBom('aarch64-apple-darwin', root, lock))
@@ -278,22 +276,11 @@ describe('Desktop release preparation', () => {
   })
 
   it('rejects a deployed package whose lock resolution lacks a SHA-512 SRI', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'dsh-desktop-sbom-'))
-    roots.push(root)
-    await manifest(root, {
-      name: 'desktop-runtime',
-      version: '1.2.3',
-      dependencies: { plugin: '1.0.0' },
-    })
-    await manifest(join(root, 'node_modules/plugin'), {
-      name: 'plugin',
-      version: '1.0.0',
-      license: 'MIT',
-    })
-    const lock = await lockfile(root, {
-      'plugin@1.0.0': { resolution: { integrity: 'sha256-not-a-sha512-digest' } },
-    }, {
-      'plugin@1.0.0': {},
+    const { root, lock } = await deployedPluginFixture({
+      pluginManifest: { license: 'MIT' },
+      packages: {
+        'plugin@1.0.0': { resolution: { integrity: 'sha256-not-a-sha512-digest' } },
+      },
     })
 
     expect(() => desktopNpmBom('aarch64-apple-darwin', root, lock))

@@ -32,7 +32,7 @@ GUI 栈需要考虑多种应用形态，同应用形态内的不同运行环境�
 | 场景 | 命令 | 内容 | 何时跑 |
 |---|---|---|---|
 | 基础 | `pnpm run test:gui` | 1+2 层 vitest（`packages/client packages/host`），秒级、无浏览器、无 server | 改 GUI 任意源码后随手跑 |
-| 语义快照 | `DSH_EXAMPLE_MODE=lib pnpm run test:snapshot` | 无需密钥的组装应用语义，以及仓库按传输形态划分的预期输出 | 用户可见的 GUI 变更后；交付前 |
+| 非浏览器快照 | `DSH_EXAMPLE_MODE=lib pnpm run test:snapshot` | 无需密钥的协议、CLI 和后端预期输出；Web UI 文件只归属于浏览器车道 | 改动非浏览器外部行为后；交付前 |
 | 浏览器端到端 | `pnpm run test:web` | 先重建前端 dist，再跑 3 层浏览器全集：双级冒烟测试（fixture 级 + 真 host 级 self-skip）加上无密钥回放 e2e 场景（`DSH_SNAPSHOT=record`/`refresh` 重录 fixture / 重写期望输出） | 改构建面/boot/承载后；交付前 |
 | 浏览器预期输出门禁 | `DSH_SNAPSHOT=replay pnpm run test:web:built` | 复用 CI 构建的产物，并在不写入的情况下比较每份已提交的浏览器预期输出 | 每个 Linux 拉取请求 |
 | 门禁 | `pnpm run test:coverage` | 全仓门禁（host 与 client GUI 包均纳入，仅排除带注释的浏览器级例外） | PR（Pull Request）窗口 |
