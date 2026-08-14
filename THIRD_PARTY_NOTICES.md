@@ -93,6 +93,7 @@ External packages that a workspace package resolves at runtime. The tier covers 
 
 pnpm applies local patches to the following packages at install time, so shipped artifacts carry modified copies; each patch file is the complete record of the modification:
 
+- `@yao-pkg/pkg@6.21.0` — [`patches/@yao-pkg+pkg@6.21.0.patch`](patches/@yao-pkg+pkg@6.21.0.patch)
 - `node-pty@1.1.0` — [`patches/node-pty@1.1.0.patch`](patches/node-pty@1.1.0.patch)
 
 ## Official Claude Code platform payloads
@@ -113,6 +114,22 @@ The installed SDK 0.3.220 declares the following optional platform packages. Eac
 | [`@anthropic-ai/claude-agent-sdk-win32-x64`](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk-win32-x64) | 0.3.220 | SEE LICENSE IN LICENSE.md |
 
 
+## macOS Desktop distribution
+
+The macOS Desktop application embeds the pinned Node runtime in its SEA sidecar and compiles a Rust Tauri host. The exact npm closure is recorded by `pnpm-lock.yaml`; the exact Rust closure is recorded by `apps/desktop/src-tauri/Cargo.lock`. The release preparation step writes target-specific CycloneDX documents into the application's legal resources.
+
+| Component | Version | License | Role |
+| --- | --- | --- | --- |
+| [`Node.js`](https://nodejs.org/) | Node 24.19.0 | MIT | Embedded by the Desktop SEA sidecar |
+| [`@yao-pkg/pkg`](https://github.com/yao-pkg/pkg) | 6.21.0 | MIT | SEA packer used for the embedded Node runtime |
+| [`libc`](https://crates.io/crates/libc) | 0.2.189 | MIT OR Apache-2.0 | POSIX process-group and signal calls used by the macOS host |
+| [`signal-hook`](https://crates.io/crates/signal-hook) | 0.3.18 | Apache-2.0 OR MIT | host termination-signal delivery |
+| [`tauri`](https://crates.io/crates/tauri) | 2.11.5 | MIT OR Apache-2.0 | native macOS application and WebView host |
+| [`tauri-build`](https://crates.io/crates/tauri-build) | 2.6.3 | MIT OR Apache-2.0 | Tauri build integration |
+
+`scripts/prepare-desktop-release.ts` records build digests for the native host, sidecar, ripgrep, and spawn-helper, and extracts Node's complete license from the verified runtime archive. The generated legal directory is an ignored release input rather than a source-controlled substitute for these repository notices.
+
+
 ## Development-only npm dependencies
 
 External packages **directly declared** only by repository tooling, test infrastructure, the documentation site, the demo leaves, or the native launcher's build workspace. No shipped surface names them itself. A package here may still be pulled in transitively by a runtime dependency — `pnpm-lock.yaml` is the authority on the full closure — so this tier records who declares a package, not what a build ultimately bundles.
@@ -124,6 +141,7 @@ External packages **directly declared** only by repository tooling, test infrast
 | [`@modelcontextprotocol/server-filesystem`](https://github.com/modelcontextprotocol/servers) | MIT / Apache-2.0 |
 | [`@openai/codex`](https://github.com/openai/codex) | Apache-2.0 |
 | [`@stylistic/eslint-plugin`](https://github.com/eslint-stylistic/eslint-stylistic) | MIT |
+| [`@tauri-apps/cli`](https://github.com/tauri-apps/tauri) | Apache-2.0 OR MIT |
 | [`@testing-library/dom`](https://github.com/testing-library/dom-testing-library) | MIT |
 | [`@testing-library/react`](https://github.com/testing-library/react-testing-library) | MIT |
 | [`@types/babel__code-frame`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
@@ -138,6 +156,7 @@ External packages **directly declared** only by repository tooling, test infrast
 | [`@types/ws`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@vitejs/plugin-react`](https://github.com/vitejs/vite-plugin-react) | MIT |
 | [`@vitest/coverage-v8`](https://github.com/vitest-dev/vitest) | MIT |
+| [`@yao-pkg/pkg`](https://github.com/yao-pkg/pkg) | MIT |
 | [`@yarnpkg/cli-dist`](https://github.com/yarnpkg/berry) | BSD-2-Clause |
 | [`cytoscape`](https://github.com/cytoscape/cytoscape.js) | MIT |
 | [`cytoscape-cose-bilkent`](https://github.com/cytoscape/cytoscape.js-cose-bilkent) | MIT |
@@ -185,7 +204,7 @@ Direct dependencies of the `pyproject.toml` manifests, plus `uv` as the developm
 
 | Package | License | Role |
 | --- | --- | --- |
-| [`@yao-pkg/pkg`](https://github.com/yao-pkg/pkg) | MIT | invoked by `scripts/build-exe-for-python-sdk.ts` to assemble the single-file SDK runtime executable |
+| [`@yao-pkg/pkg`](https://github.com/yao-pkg/pkg) | MIT | assembles the sealed Node SEA runtimes for the Python SDK and macOS Desktop distribution |
 
 ## First-party native packages
 

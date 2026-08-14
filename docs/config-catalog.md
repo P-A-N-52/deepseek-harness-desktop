@@ -168,7 +168,7 @@ Source: [`packages/core/agent-loop/src/index.ts:255`](../packages/core/agent-loo
 
 ## `@deepseek-ai/dsh-agent-presets`
 
-Requires: `loader`
+Requires: `loader` · `appModuleResolver`
 
 ```ts config-catalog
 /** Plugin config: which preset is the default, and where presets live. */

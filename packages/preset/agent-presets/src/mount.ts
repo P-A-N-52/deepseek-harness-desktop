@@ -19,6 +19,7 @@ import { pathToFileURL } from 'node:url'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
 import { Include } from '@deepseek-ai/cordis-plugin-include'
 import type { EntryTree } from '@deepseek-ai/cordis-plugin-loader'
+import type {} from '@deepseek-ai/dsh-app-boot'
 import { scopeOf, scopeParentOf, type ScopeKey } from '@deepseek-ai/dsh-scope'
 import { PresetMountError, type AgentPreset } from './preset.ts'
 
@@ -43,12 +44,12 @@ interface MountedTree {
 const mounted = new WeakMap<object, MountedTree>()
 
 /**
- * The base URL bare specifiers resolve against, per pending mount, keyed by the
- * same config object. Recorded before the subtree is plugged, because `Include`
- * rewrites its own context's `baseUrl` to the composition's directory and the
- * pre-mount value is the only handle on where the harness itself lives.
+ * The application-selected package tree's module base, per pending mount,
+ * keyed by the same config object. `Include` keeps its own `baseUrl` beside
+ * the composition so relative rows travel with a preset; bare rows instead
+ * use the launcher's package tree through this base.
  */
-const harnessBase = new WeakMap<object, string>()
+const appModuleBases = new WeakMap<object, string>()
 
 /**
  * Include subclass that publishes its tree and fiber for the audit, and never
@@ -61,7 +62,8 @@ class PresetTree extends Include {
   }
 
   /**
-   * Resolve a bare specifier from the harness rather than from the preset.
+   * Resolve a bare specifier from the application package tree rather than
+   * from the preset.
    *
    * `EntryTree.import()` resolves against the tree's own `baseUrl`, which
    * `Include` sets to the composition's directory. That is right for a
@@ -69,18 +71,19 @@ class PresetTree extends Include {
    * a package name: a locally authored preset lives under the user's home,
    * where Node's upward `node_modules` walk never reaches the harness's own
    * dependencies, so every `@deepseek-ai/dsh-*` row would fail to import. The
-   * mount records the host composition's base instead, which is inside the
-   * installed harness, and bare names resolve from there. An absolute
-   * filesystem path names neither base and becomes a file URL before Node's
-   * ESM loader receives it, which is required for drive-letter paths on
-   * Windows.
+   * mount records the launcher's selected module base instead. A source
+   * launch may select the physical profile tree so Loader hooks keep mapping
+   * workspace packages to source, while a sealed launch selects its embedded
+   * executable closure. An absolute filesystem path names neither base and
+   * becomes a file URL before Node's ESM loader receives it, which is required
+   * for drive-letter paths on Windows.
    * @param name - the module specifier from the row.
    * @param getOuterStack - the loader's stack composer for import diagnostics.
    * @returns the imported module, or the `cordis:` builtin.
    */
   override import(name: string, getOuterStack?: () => string[]): unknown {
     const specifier = isAbsolute(name) ? pathToFileURL(name).href : name
-    const base = harnessBase.get(this.config)
+    const base = appModuleBases.get(this.config)
     /* v8 ignore next -- every PresetTree is constructed by `mountPreset`, which records the base first */
     if (base === undefined) return super.import(specifier, getOuterStack)
     if (name.startsWith('.') || name.startsWith('cordis:')) return super.import(name, getOuterStack)
@@ -338,11 +341,10 @@ export async function mountPreset(agentCtx: Context, preset: AgentPreset): Promi
     )
   }
   const config: Include.Config = { path: pathToFileURL(preset.path).href }
-  // Captured before the subtree exists: the standing scope context still
-  // carries the host composition's base, which is inside the installed
-  // harness and is therefore where a row's package name has to resolve from.
-  /* v8 ignore next -- the Loader sets `baseUrl` on the root before any scoped context derives from it */
-  if (agentCtx.baseUrl !== undefined) harnessBase.set(config, agentCtx.baseUrl)
+  // Captured before the subtree exists: Include replaces its child's base with
+  // the preset directory, while bare rows belong to the package tree app boot
+  // selected for this deployment.
+  appModuleBases.set(config, agentCtx.appModuleResolver.moduleBaseUrl)
   // Before the record this mount is about to add: standing mounts are one per
   // preset and live until whole-tree teardown, so pruning here only sweeps
   // records of torn-down runtimes (tests; an HMR reload of the roster).

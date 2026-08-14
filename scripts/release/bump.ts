@@ -17,6 +17,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join, matchesGlob } from 'node:path'
 import { parseArgs } from 'node:util'
+import { desktopVersion, writeDesktopVersion } from '../desktop-version.ts'
 import { releaseFamily, type ReleaseFamily, type ReleaseMember } from './families.ts'
 import { capture, isEntry } from './process.ts'
 
@@ -329,6 +330,7 @@ function main(): void {
     const shared = planShared(family, root, members, request)
     planned = shared.planned
     sharedVersion = shared.version
+    desktopVersion(sharedVersion)
   } else {
     if (positionals.length > 0) throw new Error('release:vendor takes no version: each package increments its own patch')
     if (values.prerelease !== undefined && !/^[0-9A-Za-z.-]+$/.test(values.prerelease)) {
@@ -344,6 +346,7 @@ function main(): void {
 
   const dryRun = values['dry-run']
   if (!dryRun) {
+    if (sharedVersion !== undefined) writeDesktopVersion(root, rootVersion(root), sharedVersion)
     for (const entry of planned) writeVersion(root, entry.manifestPath, entry.from, entry.to)
     capture('pnpm', ['install', '--lockfile-only'])
   }
@@ -357,7 +360,10 @@ function main(): void {
     console.log('release bump: dry run, nothing written')
     return
   }
-  capture('git', ['add', 'pnpm-lock.yaml', ...planned.map(entry => entry.manifestPath)])
+  const desktopVersionFiles = sharedVersion === undefined
+    ? []
+    : ['apps/desktop/src-tauri/Cargo.toml', 'apps/desktop/src-tauri/tauri.conf.json']
+  capture('git', ['add', 'pnpm-lock.yaml', ...planned.map(entry => entry.manifestPath), ...desktopVersionFiles])
   capture('git', ['commit', '-m', `release(${family.id}): ${summary}`])
   console.log('release bump: committed. After this merges to master, tag it:')
   for (const tag of [...new Set(planned.map(entry => entry.tag).filter(tag => tag !== undefined))]) {

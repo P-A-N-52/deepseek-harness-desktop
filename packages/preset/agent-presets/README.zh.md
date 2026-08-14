@@ -8,7 +8,7 @@
 
 ## 服务：`AgentPresets`（ctx 键：`agentPresets`）
 
-发现过程不做缓存：`list()` 与 `resolve()` 每次调用都重新读取各个根目录，因此进程运行期间新写的 preset 立即可见，被删除的 preset 也会在下一次读取时消失。发现过程同时负责 preset 的**健康**：组装文件缺失或不可加载（YAML 无法解析——用加载器自己的方言检查，含 `!!js`——或不是由具名插件行组成的列表）的目录会作为携带 `broken` 原因的行列出而不是被跳过，因为被跳过的目录仍在磁盘上占着它的 id，而各个界面却没有任何可删的东西。目录名不是可用 preset id（`[a-z0-9][a-z0-9-]*`）的目录才被直接跳过：复制永远不可能占用那种名字。
+发现过程不做缓存：`list()` 与 `resolve()` 每次调用都重新读取各个根目录，因此进程运行期间新写的 preset 立即可见，被删除的 preset 也会在下一次读取时消失。根目录扫描先枚举名称、再检查每个候选路径，不要求文件系统提供 `Dirent` 对象，因此随附根目录也能从封闭应用文件系统读取。发现过程同时负责 preset 的**健康**：组装文件缺失或不可加载（YAML 无法解析——用加载器自己的方言检查，含 `!!js`——或不是由具名插件行组成的列表）的目录会作为携带 `broken` 原因的行列出而不是被跳过，因为被跳过的目录仍在磁盘上占着它的 id，而各个界面却没有任何可删的东西。目录名不是可用 preset id（`[a-z0-9][a-z0-9-]*`）的目录才被直接跳过：复制永远不可能占用那种名字。
 
 - `ctx.agentPresets.defaultId: string` 调用方未指定时挂载的 preset id。
 - `ctx.agentPresets.list(): Promise<AgentPreset[]>` 当前各根目录提供的全部 preset；id 重复时靠前的根目录胜出；损坏的 preset 也在其中，各自携带原因。
@@ -62,7 +62,7 @@ subagent 的子 agent 通过 `composeFrom()` 加入其父方的常驻组装，�
 
 ### preset 的各行如何解析
 
-行的**包名**从宿主组装解析，而非从 preset 目录解析。Loader 通常按 entry 所属树的 `baseUrl` 解析，而对 preset 而言那就是组装文件所在之处；本地创作的 preset 位于用户主目录之下，Node 向上查找 `node_modules` 永远够不到 harness，因此每一个 `@deepseek-ai/dsh-*` 行都会导入失败。挂载在插入子树之前先记录宿主的基址，并把裸标识符送往那里。
+行的**包名**从 app boot 选定的包树解析，而非从 preset 目录解析。Loader 通常按 entry 所属树的 `baseUrl` 解析，而对 preset 而言那就是组装文件所在之处；本地创作的 preset 位于用户主目录之下，Node 向上查找 `node_modules` 永远够不到 harness，而封闭 preset 位于快照内、其父上下文却仍指向物理 profile。挂载把裸标识符交给 `ctx.appModuleResolver.moduleBaseUrl`：源码启动保留 Loader 映射，封闭启动则导入可执行文件闭包。读取包元数据的消费方使用该解析器的 `resolve()` 方法，因此代码与元数据始终来自同一棵应用包树。
 
 **相对**路径仍从 preset 自身的目录解析，因此 preset 自带的插件文件与 skill 目录会随它一同迁移。
 

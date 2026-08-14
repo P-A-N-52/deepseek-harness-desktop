@@ -13,6 +13,7 @@ import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import { describe, expect, it } from 'vitest'
 import AgentPresets, { livePresetMounts, type Config } from '@deepseek-ai/dsh-agent-presets'
 import * as AgentPresetsInvariant from '@deepseek-ai/dsh-agent-presets/invariant'
+import { installTestAppModuleResolver } from './app-module-resolver.ts'
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 const ROOTS = [
@@ -22,7 +23,7 @@ const ROOTS = [
 
 async function harness(roster: Partial<Config> = {}): Promise<Context> {
   const ctx = new Context()
-  ctx.baseUrl = pathToFileURL(FIXTURES).href + '/'
+  installTestAppModuleResolver(ctx, pathToFileURL(FIXTURES).href + '/')
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   await ctx.plugin(LlmRuntime)

@@ -30,7 +30,7 @@ on:
       targets:
         description: >-
           Comma-separated pkg targets to build. Any subset of:
-          node24-linux-x64, node24-linux-arm64, node24-macos-arm64.
+          node24.19.0-linux-x64, node24.19.0-linux-arm64, node24.19.0-macos-arm64.
           Empty builds all three.
         type: string
         required: false
@@ -86,7 +86,7 @@ jobs:
         id: plan
         env:
           # Label runs and blank dispatch inputs build all targets.
-          TARGETS: ${{ inputs.targets || 'node24-linux-x64,node24-linux-arm64,node24-macos-arm64' }}
+          TARGETS: ${{ inputs.targets || 'node24.19.0-linux-x64,node24.19.0-linux-arm64,node24.19.0-macos-arm64' }}
         run: |
           set -euo pipefail
           matrix='[]'
@@ -97,11 +97,11 @@ jobs:
             # Native-only: hosted arm64 Linux uses ubuntu-24.04-arm, while
             # macos-latest is Apple Silicon.
             case "$t" in
-              node24-linux-x64)   runner=ubuntu-latest ;;
-              node24-linux-arm64) runner=ubuntu-24.04-arm ;;
-              node24-macos-arm64) runner=macos-latest ;;
+              node24.19.0-linux-x64)   runner=ubuntu-latest ;;
+              node24.19.0-linux-arm64) runner=ubuntu-24.04-arm ;;
+              node24.19.0-macos-arm64) runner=macos-latest ;;
               *)
-                echo "::error::Unknown target '$t'. Supported: node24-linux-x64, node24-linux-arm64, node24-macos-arm64."
+                echo "::error::Unknown target '$t'. Supported: node24.19.0-linux-x64, node24.19.0-linux-arm64, node24.19.0-macos-arm64."
                 exit 1
                 ;;
             esac
@@ -227,7 +227,7 @@ jobs:
           VERSION: ${{ needs.plan.outputs.version }}
         run: |
           set -euo pipefail
-          platform="${TARGET#node24-}"
+          platform="${TARGET#node24.19.0-}"
           exe="$PWD/dist-exe/dsh-jsonrpc-agent-pkg-$platform"
           [ -x "$exe" ] || { echo "::error::$exe missing or not executable"; exit 1; }
           case "$platform" in

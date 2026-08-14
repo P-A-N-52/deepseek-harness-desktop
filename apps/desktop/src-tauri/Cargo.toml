@@ -1,8 +1,8 @@
 [package]
 name = "dsh-desktop"
 version = "0.1.0-rc.5"
-description = "Native shell for the DeepSeek Harness Web application"
-authors = ["DeepSeek"]
+description = "Community macOS shell for the DeepSeek Harness Web application"
+authors = ["DeepSeek Harness contributors"]
 license = "MIT"
 repository = "https://github.com/P-A-N-52/deepseek-harness-desktop"
 edition = "2021"

@@ -323,6 +323,24 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'appModuleResolver',
+    summary: 'Bare-module resolution owned by the application deployment.',
+    description: 'Bare-module resolution owned by the application deployment.',
+    methods: [
+      {
+        signature: 'readonly moduleBaseUrl: string',
+        description: 'Parent URL that anchors Loader imports in the selected package tree.',
+        parameters: [],
+      },
+      {
+        signature: 'resolve(specifier: string): string',
+        description: 'Resolve one bare module or package subpath from the selected package tree.',
+        parameters: [{ name: 'specifier', description: 'bare module or package subpath to resolve.' }],
+        returns: 'the absolute resolved filename.',
+      },
+    ],
+  },
+  {
     key: 'approval',
     summary: 'Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session.',
     description: 'Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session. It exposes deterministic policy changes to the model through the runtime-context snapshot and switch notices.',

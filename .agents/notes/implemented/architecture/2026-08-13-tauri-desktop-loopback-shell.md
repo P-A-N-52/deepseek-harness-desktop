@@ -14,7 +14,9 @@ DeepSeek Harness already has a complete browser GUI, a same-origin API carrier, 
 
 The page receives no Tauri IPC, invoke handler, remote capability, shell, filesystem, or process capability. Navigation is admitted only to the ready loopback origin. `$DSH_HOME` remains the sidecar's resolved Harness home, so profiles, settings, credential references, and sessions are shared with `dsh`.
 
-The sealed entry selects its executable closure as the application module tree. App boot uses that tree both to import bare Cordis plugins and to provide `ctx.appModuleResolver`; the client module registry resolves every `dsh.client` package manifest through that service. The included configuration context remains profile-relative, so a physical `$DSH_HOME` profile cannot displace or hide metadata for code already imported from the closure.
+The sealed entry selects its executable closure as the application module tree. App boot uses that tree both to import bare Cordis plugins and to provide `ctx.appModuleResolver`; the client module registry resolves every `dsh.client` package manifest through that service, and agent preset subtrees use its `moduleBaseUrl` for bare rows. The included configuration context remains profile-relative, so a physical `$DSH_HOME` profile cannot displace or hide code or metadata selected from the closure. Shipped agent presets enumerate snapshot directory names and inspect their paths without depending on `Dirent` prototypes from the sealed filesystem.
+
+The sealed entry pins the browse directory-picker composition. Directory listing and creation travel through the existing same-origin Host API, while the interaction remains inside the WebView. It neither grants the page a Tauri filesystem capability nor delegates the chooser window to an `osascript` child. The ordinary Web profile keeps its adaptive picker because its host and browser may have different deployment needs.
 
 The desktop shell does not add an approval-response path. A pending approval continues to have the existing GUI's display-only behavior until the established API protocol implements `ApiProxy.respond`.
 
@@ -24,7 +26,7 @@ The Rust host owns one sidecar process tree rooted in a dedicated process group.
 
 ## Verification
 
-Desktop checks cover sidecar command construction, ready-URL admission, startup failure, and shutdown. First-day release acceptance uses a packaged macOS GUI smoke: launch the app, create or resume a session through the existing page, send a prompt, quit it, terminate the host through a signal and forced exit, and confirm that the shared `$DSH_HOME` state remains while no sidecar tree survives. The browser's keyless replay and real-model run remain browser/API coverage, not a substitute for that native smoke.
+Desktop checks cover sidecar command construction, ready-URL admission, startup failure, and shutdown. The final SEA runs through Chromium to prove plugin activation, onboarding, and the in-app workspace picker. The packaged application lifecycle check launches the native host, identifies its direct sidecar and loopback listener, terminates the host, proves the process tree and port are gone, and restarts it against the same `$DSH_HOME`. Chromium and API checks do not claim native WebView interaction coverage.
 
 ## Alternatives considered
 

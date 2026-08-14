@@ -33,6 +33,8 @@ declare module '@deepseek-ai/cordis' {
 
 /** Bare-module resolution owned by the application deployment. */
 export interface AppModuleResolver {
+  /** Parent URL that anchors Loader imports in the selected package tree. */
+  readonly moduleBaseUrl: string
   /**
    * Resolve one bare module or package subpath from the selected package tree.
    * @param specifier - bare module or package subpath to resolve.
@@ -788,6 +790,7 @@ export async function boot(
     ctx.baseUrl = moduleBaseUrl
     ctx.provide('dshHomePath', dshHomePath)
     ctx.provide('appModuleResolver', {
+      moduleBaseUrl,
       resolve: specifier => appRequire.resolve(specifier),
     })
     await ctx.plugin(Loader)

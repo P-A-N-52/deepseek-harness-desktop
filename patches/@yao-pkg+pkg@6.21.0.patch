@@ -1,0 +1,18 @@
+diff --git a/lib-es5/sea.js b/lib-es5/sea.js
+--- a/lib-es5/sea.js
++++ b/lib-es5/sea.js
+@@ -287,7 +287,13 @@ async function getNodejsExecutable(target, opts) {
+             checksumUrl = `https://nodejs.org/dist/${nodeVersion}/SHASUMS256.txt`;
+             break;
+     }
+-    const downloadDir = (0, path_1.join)((0, os_1.homedir)(), '.pkg-cache', 'sea');
++    const cacheRoot = process.env.DSH_PKG_SEA_CACHE_DIR;
++    if (cacheRoot !== undefined && (cacheRoot.trim() === '' || !(0, path_1.isAbsolute)(cacheRoot))) {
++        throw new Error('DSH_PKG_SEA_CACHE_DIR must be a non-empty absolute path');
++    }
++    // The Harness build provides a fresh cache containing only a verified
++    // archive. The default preserves pkg's ordinary standalone behavior.
++    const downloadDir = cacheRoot ?? (0, path_1.join)((0, os_1.homedir)(), '.pkg-cache', 'sea');
+     // Ensure the download directory exists
+     if (!(await exists(downloadDir))) {
+         await (0, promises_1.mkdir)(downloadDir, { recursive: true });

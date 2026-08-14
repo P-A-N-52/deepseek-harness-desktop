@@ -6,9 +6,10 @@
  * absolute paths when it starts the sidecar.
  */
 
-import { chmod, copyFile, mkdir } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { chmod, copyFile, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import {
   REPOSITORY_ROOT,
   SEA_NODE_RANGE,
@@ -16,7 +17,9 @@ import {
   SeaTarget,
   SingleExeBuild,
   parseSeaBuildCli,
+  seaRuntimeProvenance,
 } from './single-exe-build.ts'
+import { lockedSeaPacker, type LockedSeaPacker } from './prepare-desktop-release.ts'
 
 const LABEL = 'build-desktop'
 const DEPLOY_ROOT_PACKAGE = 'dsh-desktop-runtime-pkg'
@@ -66,8 +69,8 @@ function usage(): string {
   return [
     'Usage: pnpm exec tsx scripts/build-desktop.ts [flags]',
     '',
-    '  --targets=<target>     one host-matching pkg target, e.g. node24-macos-arm64.',
-    '                         Default: the host platform only (on node24).',
+    `  --targets=<target>     one host-matching pkg target, e.g. ${SEA_NODE_RANGE}-macos-arm64.`,
+    `                         Default: the host platform only (on ${SEA_NODE_RANGE}).`,
     '  --skip-build           skip `pnpm run build` (lib/ and web dist must already exist).',
     '  --dry-run              print every command and artifact copy without executing.',
     '  --help                 print this help.',
@@ -177,6 +180,38 @@ async function syncTauriResources(
   return [ripgrepDestination, helperDestination]
 }
 
+/**
+ * Record the exact verified Node archive consumed by the SEA packer.
+ * @param pipeline - active Desktop build.
+ * @param target - completed SEA target.
+ * @returns generated provenance path.
+ */
+async function writeRuntimeProvenance(
+  pipeline: SingleExeBuild,
+  target: SeaTarget,
+  packer: LockedSeaPacker,
+): Promise<string> {
+  const triple = tauriTargetTriple(target)
+  const path = resolve(REPOSITORY_ROOT, TAURI_RESOURCE_DIR, triple, 'sea-provenance.json')
+  if (pipeline.cli.dryRun) {
+    console.log(`${LABEL}: [dry-run] write ${path}`)
+    return path
+  }
+  const provenance = seaRuntimeProvenance(pipeline.seaRuntime(target), triple, {
+    declared: packer.declared,
+    patchHash: packer.patchHash,
+  })
+  await mkdir(dirname(path), { recursive: true })
+  const temporary = join(dirname(path), `.${basename(path)}.${randomUUID()}.tmp`)
+  try {
+    await writeFile(temporary, `${JSON.stringify(provenance, null, 2)}\n`)
+    await rename(temporary, path)
+  } finally {
+    await rm(temporary, { force: true })
+  }
+  return path
+}
+
 async function main(): Promise<void> {
   const cli = parseSeaBuildCli(process.argv.slice(2), {
     label: LABEL,
@@ -190,12 +225,12 @@ async function main(): Promise<void> {
     flatWorkspaceClosure: true,
     entryBin: ENTRY_BIN,
     staging: resolve(REPOSITORY_ROOT, DESKTOP_STAGING_DIR),
-    sourceNodeModules: resolve(REPOSITORY_ROOT, DESKTOP_RUNTIME_DIR, 'node_modules'),
     outputDir: resolve(REPOSITORY_ROOT, TAURI_BINARIES_DIR),
     outputName: target => `${SIDECAR_BASENAME}-${tauriTargetTriple(target)}`,
     assets: DESKTOP_ASSET_GLOBS,
     spawnHelperOutput: target => resolve(REPOSITORY_ROOT, DESKTOP_HELPER_DIR, `${SIDECAR_BASENAME}-${tauriTargetTriple(target)}-spawn-helper`),
   }, cli)
+  const packer = lockedSeaPacker()
   console.log(`${LABEL}: targets: ${cli.targets.map(target => target.spec).join(', ')}`)
   console.log(`${LABEL}: staging: ${pipeline.staging}`)
   await pipeline.verifyClosure()
@@ -205,7 +240,11 @@ async function main(): Promise<void> {
   const products: string[] = []
   for (const target of cli.targets) {
     const artifact = await pipeline.pack(target)
-    products.push(artifact.executable, ...await syncTauriResources(pipeline, target, artifact.spawnHelper))
+    products.push(
+      artifact.executable,
+      ...await syncTauriResources(pipeline, target, artifact.spawnHelper),
+      await writeRuntimeProvenance(pipeline, target, packer),
+    )
   }
   pipeline.printProducts(products)
 }

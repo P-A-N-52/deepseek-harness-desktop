@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest'
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url))
 const sourceLauncher = join(repoRoot, 'apps/cli/src/bin.ts')
+const desktopComposition = join(repoRoot, 'apps/cli/config/desktop.cordis.yml')
 const tsxLoader = createRequire(import.meta.url).resolve('tsx/esm')
 const packagedRuntime = process.env.DSH_DESKTOP_RUNTIME_BIN
 const requireDesktopRuntime = process.env.DSH_REQUIRE_DESKTOP_RUNTIME_SMOKE === '1'
@@ -41,7 +42,11 @@ function parseBootManifest(html: string): BootManifest {
 async function runRuntime(cwd: string): Promise<{ responseBody: string; responseStatus: number; result: RuntimeResult; url: string }> {
   const command = packagedRuntime ?? process.execPath
   const args = packagedRuntime === undefined
-    ? ['--import', tsxLoader, sourceLauncher, 'web', '--host', '127.0.0.1', '--port', '0']
+    ? [
+      '--import', tsxLoader, sourceLauncher,
+      'web', '--patch', desktopComposition,
+      '--host', '127.0.0.1', '--port', '0',
+    ]
     : []
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -120,6 +125,8 @@ describe.skipIf(!requireDesktopRuntime)('packaged Desktop runtime startup', () =
       const clientIds = parseBootManifest(smoke.responseBody).entries.map(entry => entry.id)
       expect(clientIds).toContain('@deepseek-ai/dsh-client-runtime')
       expect(clientIds).toContain('@deepseek-ai/dsh-client-ui-layout')
+      expect(clientIds).toContain('@deepseek-ai/dsh-client-ui-directory-picker-browse')
+      expect(clientIds).not.toContain('@deepseek-ai/dsh-client-ui-directory-picker-native')
       expect(smoke.result).toMatchObject({ code: 0, signal: null })
       expect(smoke.result.stderr).not.toContain('ExperimentalWarning')
     } finally {

@@ -55,6 +55,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   agentPresets: 'core.md',
   agents: 'core.md',
   apiProxy: 'typert.md',
+  appModuleResolver: 'client-modules.md',
   approval: 'approval.md',
   attachments: 'attachment.md',
   shell: 'shell.md',

@@ -13,6 +13,7 @@ import { resolve } from 'node:path'
 import * as yaml from 'js-yaml'
 import { parse as parseToml, type TomlTableWithoutBigInt, type TomlValueWithoutBigInt } from 'smol-toml'
 import parseSpdx from 'spdx-expression-parse'
+import { SEA_NODE_RANGE, SEA_PKG_SPEC } from './single-exe-build.ts'
 
 const root = resolve(import.meta.dirname, '..')
 const OUT = 'THIRD_PARTY_NOTICES.md'
@@ -25,7 +26,7 @@ const ALL_KINDS = ['dependencies', 'devDependencies', 'optionalDependencies', 'p
 /**
  * Workspace areas that never reach a user: repository tooling and gates (the
  * root manifest), test infrastructure, the documentation site, the runnable
- * demo leaves, and the native launcher's build workspace. A runtime
+ * demo leaves, and the Landlock launcher's build workspace. A runtime
  * declaration by anything outside these areas is a disclosure-relevant
  * runtime dependency because any plugin package can be mounted from a user's
  * `cordis.yml`.
@@ -36,7 +37,7 @@ const DEV_ONLY_AREAS = [
   'packages/test-support/client-runtime/',
   'website/',
   'examples/',
-  'native/',
+  'native/landlock-run/',
 ] as const
 
 /** First-party public native packages: reachable at runtime but not third-party. */
@@ -90,16 +91,42 @@ const PYTHON_METADATA: Record<string, { license: string; repo: string; role: str
 
 type PythonMetadata = typeof PYTHON_METADATA
 
+/** Pinned SEA packer shared by every first-party sealed Node runtime. */
+const SEA_PACKER_VERSION = SEA_PKG_SPEC.startsWith('@yao-pkg/pkg@')
+  ? SEA_PKG_SPEC.slice('@yao-pkg/pkg@'.length)
+  : (() => { throw new Error(`gen-third-party-notices: SEA_PKG_SPEC must pin @yao-pkg/pkg, got ${JSON.stringify(SEA_PKG_SPEC)}.`) })()
+
+const SEA_PACKER = {
+  name: '@yao-pkg/pkg',
+  version: SEA_PACKER_VERSION,
+  license: 'MIT',
+  repo: 'https://github.com/yao-pkg/pkg',
+  role: 'assembles the sealed Node SEA runtimes for the Python SDK and macOS Desktop distribution',
+  pinSource: 'scripts/single-exe-build.ts',
+} as const
+
 /** Tools fetched by scripts at build time, keyed by the pin the script owns. */
-const BUILD_TIME_TOOLS = [
-  {
-    name: '@yao-pkg/pkg',
-    license: 'MIT',
-    repo: 'https://github.com/yao-pkg/pkg',
-    role: 'invoked by `scripts/build-exe-for-python-sdk.ts` to assemble the single-file SDK runtime executable',
-    pinSource: 'scripts/build-exe-for-python-sdk.ts',
+const BUILD_TIME_TOOLS = [SEA_PACKER] as const
+
+/** Direct Cargo dependencies of the Desktop shell, with their distribution roles. */
+const DESKTOP_CARGO_COMPONENTS = {
+  libc: {
+    license: 'MIT OR Apache-2.0',
+    role: 'POSIX process-group and signal calls used by the macOS host',
   },
-]
+  'signal-hook': {
+    license: 'Apache-2.0 OR MIT',
+    role: 'host termination-signal delivery',
+  },
+  tauri: {
+    license: 'MIT OR Apache-2.0',
+    role: 'native macOS application and WebView host',
+  },
+  'tauri-build': {
+    license: 'MIT OR Apache-2.0',
+    role: 'Tauri build integration',
+  },
+} as const
 
 /** The `package.json` fields this generator reads. */
 export interface Manifest {
@@ -575,10 +602,67 @@ function collectPatched(): { spec: string; patch: string }[] {
 function verifyBuildTimePins(): void {
   for (const tool of BUILD_TIME_TOOLS) {
     const text = readFileSync(resolve(root, tool.pinSource), 'utf8')
-    if (!text.includes(tool.name)) {
-      throw new Error(`gen-third-party-notices: ${tool.pinSource} no longer references ${tool.name}; update BUILD_TIME_TOOLS.`)
+    if (!text.includes(`${tool.name}@${tool.version}`)) {
+      throw new Error(`gen-third-party-notices: ${tool.pinSource} no longer pins ${tool.name}@${tool.version}; update BUILD_TIME_TOOLS.`)
     }
   }
+}
+
+/** Read a TOML table of direct dependency declarations and return its package names. */
+function cargoDependencyNames(
+  document: TomlTableWithoutBigInt,
+  section: string,
+): string[] {
+  const dependencies = optionalTomlTable(document[section], `Cargo.toml [${section}]`)
+  return Object.keys(dependencies ?? {})
+}
+
+/** One direct Cargo component shipped in the Tauri Desktop application. */
+interface DesktopCargoComponent {
+  readonly name: keyof typeof DESKTOP_CARGO_COMPONENTS
+  readonly version: string
+  readonly license: string
+  readonly role: string
+}
+
+/** Resolve direct Desktop Cargo components against Cargo.lock rather than a version range. */
+function collectDesktopCargoComponents(): DesktopCargoComponent[] {
+  const manifest = parseToml(
+    readFileSync(resolve(root, 'apps/desktop/src-tauri/Cargo.toml'), 'utf8'),
+    { integersAsBigInt: false },
+  )
+  const direct = new Set([
+    ...cargoDependencyNames(manifest, 'dependencies'),
+    ...cargoDependencyNames(manifest, 'build-dependencies'),
+  ])
+  const expected = Object.keys(DESKTOP_CARGO_COMPONENTS)
+  const unexpected = [...direct].filter(name => !(name in DESKTOP_CARGO_COMPONENTS))
+  const missing = expected.filter(name => !direct.has(name))
+  if (unexpected.length > 0 || missing.length > 0) {
+    throw new Error(
+      `gen-third-party-notices: Desktop Cargo metadata is stale; unexpected ${unexpected.join(', ') || 'none'}, missing ${missing.join(', ') || 'none'}.`,
+    )
+  }
+
+  const lock = parseToml(
+    readFileSync(resolve(root, 'apps/desktop/src-tauri/Cargo.lock'), 'utf8'),
+    { integersAsBigInt: false },
+  )
+  const records = lock.package
+  if (!Array.isArray(records)) {
+    throw new Error('gen-third-party-notices: Cargo.lock has no package array.')
+  }
+  return expected.map((name) => {
+    const entry = records.find((value): value is TomlTableWithoutBigInt => {
+      return isTomlTable(value) && value.name === name
+    })
+    if (entry === undefined || typeof entry.version !== 'string') {
+      throw new Error(`gen-third-party-notices: Cargo.lock has no versioned ${name} package.`)
+    }
+    const componentName = name as keyof typeof DESKTOP_CARGO_COMPONENTS
+    const metadata = DESKTOP_CARGO_COMPONENTS[componentName]
+    return { name: componentName, version: entry.version, ...metadata }
+  }).sort((left, right) => left.name.localeCompare(right.name))
 }
 
 /** SPDX identifiers this project may ship without further review. */
@@ -656,6 +740,26 @@ ${rows.join('\n')}
 `
 }
 
+/** Render direct native and SEA components that ship only in the Desktop application. */
+function renderDesktopDistribution(components: DesktopCargoComponent[]): string {
+  const rows = [
+    `| [\`Node.js\`](https://nodejs.org/) | ${SEA_NODE_RANGE.replace('node', 'Node ')} | MIT | Embedded by the Desktop SEA sidecar |`,
+    `| [\`${SEA_PACKER.name}\`](${SEA_PACKER.repo}) | ${SEA_PACKER.version} | MIT | SEA packer used for the embedded Node runtime |`,
+    ...components.map(component => `| [\`${component.name}\`](https://crates.io/crates/${component.name}) | ${component.version} | ${component.license} | ${component.role} |`),
+  ]
+  return `
+## macOS Desktop distribution
+
+The macOS Desktop application embeds the pinned Node runtime in its SEA sidecar and compiles a Rust Tauri host. The exact npm closure is recorded by \`pnpm-lock.yaml\`; the exact Rust closure is recorded by \`apps/desktop/src-tauri/Cargo.lock\`. The release preparation step writes target-specific CycloneDX documents into the application's legal resources.
+
+| Component | Version | License | Role |
+| --- | --- | --- | --- |
+${rows.join('\n')}
+
+\`scripts/prepare-desktop-release.ts\` records build digests for the native host, sidecar, ripgrep, and spawn-helper, and extracts Node's complete license from the verified runtime archive. The generated legal directory is an ignored release input rather than a source-controlled substitute for these repository notices.
+`
+}
+
 /**
  * Render the complete notices document.
  * @returns the exact bytes `THIRD_PARTY_NOTICES.md` must hold.
@@ -668,6 +772,7 @@ export function render(): string {
   const vendored = collectVendored()
   const python = collectPython()
   const patched = collectPatched()
+  const desktopCargo = collectDesktopCargoComponents()
   const claudeDistribution = runtimeDeps.some(
     dep => dep.name === CLAUDE_AGENT_SDK_PACKAGE,
   )
@@ -715,6 +820,7 @@ pnpm applies local patches to the following packages at install time, so shipped
 
 ${patchedLines.join('\n')}
 ${renderClaudeDistribution(claudeDistribution)}
+${renderDesktopDistribution(desktopCargo)}
 
 ## Development-only npm dependencies
 

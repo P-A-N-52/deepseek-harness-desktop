@@ -106,6 +106,30 @@ const GENERIC_SKIPS: readonly GenericSkip[] = [
   { file: 'scripts/gen-doc-graphs.ts', upstream: ['cordis'] },
 ]
 
+/** Cordis runtime event identifiers that resemble package subpaths. */
+const PRESERVED_PRODUCT_TOKENS = new Set([
+  'cordis/',
+  'cordis/*',
+  'cordis/dynamic-package',
+  'cordis/dynamic-retract',
+  'cordis/inspect-query',
+  'cordis/inspect-query-resolved',
+  'cordis/request-run',
+  'cordis/request-run-resolved',
+])
+
+/** Exact bare `cordis` product-data sites that coexist with package imports. */
+const PRESERVED_PRODUCT_LINES: Readonly<Record<string, readonly string[]>> = {
+  'packages/client/ui-settings-plugin-inventory/src/client/PluginInventorySettingsTab.tsx': ["t('cordis')"],
+  'packages/extensions/ui-cordis/src/client/CordisActionRow.tsx': ["PropsLocale<'cordis'>"],
+  'packages/extensions/ui-cordis/src/client/CordisDefineRow.tsx': ["PropsLocale<'cordis'>"],
+  'packages/extensions/ui-cordis/src/client/CordisPanel.tsx': ["PropsLocale<'cordis'>"],
+  'packages/extensions/ui-cordis/src/client/CordisRunRow.tsx': ["PropsLocale<'cordis'>"],
+  'packages/extensions/ui-cordis/src/client/index.ts': ["name: 'cordis'"],
+  'packages/extensions/ui-cordis/src/client/locales.ts': ["NS = 'cordis'"],
+  'scripts/gen-cordis-catalog.ts': ["'cordis': 'extensions.md'"],
+}
+
 /** A string that must appear exactly `count` times once the rescope has run. */
 interface PostCondition {
   readonly file: string
@@ -463,6 +487,8 @@ const VENDORED_LIBRARY = /^@deepseek-ai\\/(cosmokit|schemastery)(\\/|$)/
 /** Files the rescope must never rewrite. */
 function excluded(file: string): boolean {
   if (file === 'scripts/rescope-vendor.ts') return true // the mapping itself
+  if (file === 'scripts/rescope-vendor.spec.ts') return true // fixtures carry both package-name forms
+  if (file === 'packages/extensions/tool-cordis/src/api-catalog.ts') return true // regenerated from the rescoped source catalog
   if (file.startsWith('.agents/notes/')) return true // notes record what was true when written
   // Recorded model payloads quote documentation verbatim, so they must mirror the
   // sources on disk — including the notes this rescope leaves alone.
@@ -511,7 +537,13 @@ function rewriteLine(line: string, file: string, all: readonly Pattern[]): strin
   let out = line
   for (const pattern of all) {
     if (skipped(file, pattern)) continue
-    out = out.replace(pattern.token, (_match, quote: string, subpath: string) => `${quote}${pattern.to}${subpath}${quote}`)
+    out = out.replace(pattern.token, (match, quote: string, subpath: string) => {
+      const forward = pattern.from === pattern.upstream
+      const productToken = `${pattern.upstream}${subpath}`
+      const preservedLine = PRESERVED_PRODUCT_LINES[file]?.some(fragment => line.includes(fragment)) === true
+      if (forward && (PRESERVED_PRODUCT_TOKENS.has(productToken) || preservedLine)) return match
+      return `${quote}${pattern.to}${subpath}${quote}`
+    })
     out = out.replace(pattern.yamlName, (_match, prefix: string, suffix: string) => `${prefix}${pattern.to}${suffix}`)
   }
   return out
@@ -546,6 +578,17 @@ function rewrite(text: string, file: string, all: readonly Pattern[]): { text: s
     return next
   })
   return { text: out.join('\n'), lines }
+}
+
+/**
+ * Rewrite package-name tokens in one file while preserving product identifiers.
+ * @param text - complete file text.
+ * @param file - repository-relative path used by the prose and identifier policy.
+ * @param reverse - whether to restore upstream package names.
+ * @returns rewritten text and the number of changed lines.
+ */
+export function rewritePackageNames(text: string, file: string, reverse = false): { text: string; lines: number } {
+  return rewrite(text, file, patterns(reverse))
 }
 
 function classify(file: string): string {
@@ -596,7 +639,6 @@ function main(): void {
   const args = process.argv.slice(2)
   const mode = args.includes('--apply') ? 'apply' : args.includes('--check') ? 'check' : 'dry'
   const reverse = args.includes('--reverse')
-  const all = patterns(reverse)
   const files = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
     .split('\0')
     .filter(file => file !== '' && !excluded(file))
@@ -642,7 +684,7 @@ function main(): void {
   for (const file of files) {
     const path = resolve(root, file)
     const before = readFileSync(path, 'utf8')
-    const { text: after, lines } = rewrite(before, file, all)
+    const { text: after, lines } = rewritePackageNames(before, file, reverse)
     if (after === before) continue
     outstanding.push(file)
     const kind = classify(file)

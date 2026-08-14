@@ -11,6 +11,7 @@ import { chmod, copyFile, mkdir } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import {
   REPOSITORY_ROOT,
+  SEA_NODE_RANGE,
   SEA_PKG_SPEC,
   SingleExeBuild,
   parseSeaBuildCli,
@@ -27,10 +28,6 @@ const OUT_DIR = 'dist-exe'
 const PYTHON_RUNTIME_DIR = 'python/sdk-runtime/src/deepseek_harness_runtime/runtime'
 /** The deployed closure doubles as the node-mode carrier. */
 const PYTHON_NODE_SUBDIR = 'node'
-/** Legacy deploy may hoist peer-specialized workspace packages back here. */
-const DEPLOY_SOURCE_NODE_MODULES = 'python/sdk-runtime/node_modules'
-/** Documentation excluded from the generated runtime directory. */
-const DEPLOY_ONLY_DOCS = ['README.md', 'README.zh.md', 'README.i18n.yaml']
 
 /**
  * Whole-tree assets cover Cordis's runtime bare-package imports, which pkg's
@@ -52,8 +49,8 @@ function usage(): string {
   return [
     'Usage: pnpm exec tsx scripts/build-exe-for-python-sdk.ts [flags]',
     '',
-    '  --targets=<t1,t2,...>  pkg targets, e.g. node24-linux-x64,node24-linux-arm64,node24-macos-arm64.',
-    '                         Default: the host platform only (on node24).',
+    `  --targets=<t1,t2,...>  pkg targets, e.g. ${SEA_NODE_RANGE}-linux-x64,${SEA_NODE_RANGE}-linux-arm64,${SEA_NODE_RANGE}-macos-arm64.`,
+    `                         Default: the host platform only (on ${SEA_NODE_RANGE}).`,
     '  --skip-build           skip `pnpm run build` (lib/ artifacts must already exist).',
     '  --dry-run              print every command and config patch without executing.',
     '  --help                 print this help.',
@@ -96,11 +93,9 @@ async function main(): Promise<void> {
     deployRootPackage: DEPLOY_ROOT_PACKAGE,
     entryBin: ENTRY_BIN,
     staging: resolve(REPOSITORY_ROOT, PYTHON_RUNTIME_DIR, PYTHON_NODE_SUBDIR),
-    sourceNodeModules: resolve(REPOSITORY_ROOT, DEPLOY_SOURCE_NODE_MODULES),
     outputDir: resolve(REPOSITORY_ROOT, OUT_DIR),
     outputName: target => `${OUTPUT_BASENAME}-${target.platform}-${target.arch}`,
     assets: ASSET_GLOBS,
-    stagingDocs: DEPLOY_ONLY_DOCS,
   }, cli)
   console.log(`build-exe-for-python-sdk: targets: ${cli.targets.map(target => target.spec).join(', ')}`)
   console.log(`build-exe-for-python-sdk: staging: ${pipeline.staging}`)

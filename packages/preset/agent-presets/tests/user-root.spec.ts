@@ -20,6 +20,7 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import AgentPresets, { COMPOSITION_FILE, type Config } from '@deepseek-ai/dsh-agent-presets'
+import { installTestAppModuleResolver } from './app-module-resolver.ts'
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 const SYSTEM_ROOT = join(FIXTURES, 'system')
@@ -44,7 +45,7 @@ afterEach(() => {
 /** Boot a roster over the fixture system root, with the derived root left to the plugin. */
 async function roster(config: Partial<Config> = {}): Promise<Context> {
   const ctx = new Context()
-  ctx.baseUrl = pathToFileURL(FIXTURES).href + '/'
+  installTestAppModuleResolver(ctx, pathToFileURL(FIXTURES).href + '/')
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   await ctx.plugin(AgentPresets, {

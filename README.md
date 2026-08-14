@@ -8,14 +8,14 @@ This repository temporarily carries the complete Harness monorepo because the se
 
 ## Desktop status
 
-The first-day implementation targets Apple Silicon macOS. Local builds are ad-hoc signed `.app` bundles; Developer ID signing, notarization, DMG packaging, automatic updates, Intel builds, and other operating systems remain future release work.
+The Desktop release target is Apple Silicon macOS 13.5 or later. Local builds produce an unsigned release-shaped `.app`; the release packager verifies a clean annotated tag, applies Developer ID signing and hardened-runtime entitlements, notarizes and staples the application and DMG, mounts the DMG for final verification, and emits checksums and a release manifest. No artifact is a public release until those signed checks pass. Automatic updates, Intel builds, and other operating systems are not supported.
 
 ```sh
 pnpm install
 pnpm run desktop:build
 ```
 
-The application is produced at `apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness.app`. See the Desktop guide ([English](apps/desktop/README.md) | [中文](apps/desktop/README.zh.md)) for its runtime, data, security, and lifecycle behavior.
+The application is produced at `apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness Desktop.app`. See the Desktop guide ([English](apps/desktop/README.md) | [中文](apps/desktop/README.zh.md)) for its runtime, data, security, lifecycle, and release behavior.
 
 ## Upstream project
 

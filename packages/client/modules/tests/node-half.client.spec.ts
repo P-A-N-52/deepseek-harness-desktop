@@ -48,6 +48,7 @@ function constructWithRoute(packageNames: string[]): { service: ClientModuleRegi
   ctx.baseUrl = pathToFileURL(join(profileRoot, 'cordis.yml')).href
   const appRequire = createRequire(pathToFileURL(join(root!, 'entry.mjs')).href)
   ctx.provide('appModuleResolver', {
+    moduleBaseUrl: pathToFileURL(join(root!, 'entry.mjs')).href,
     resolve: (specifier: string) => appRequire.resolve(specifier),
   })
   ctx.provide('loader', {
