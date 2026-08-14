@@ -15,6 +15,8 @@ pnpm run desktop:build
 
 开发命令启动 Desktop host 和它的本地 sidecar。构建命令在 `apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness Desktop.app` 创建一个具备发行结构的 macOS 应用。该原始 Tauri 应用只是打包输入，不是可分发产物。
 
+在 Windows host 上，`pnpm run desktop:build:windows` 生成相同的密封 sidecar 和 MSI 安装包（`--bundles msi`）作为替代。它运行相同的发行证据生成器，目标为 `x86_64-pc-windows-msvc`。
+
 ## 未签名开发者预览产物
 
 支持的发行目标是 macOS 13.5 或更高版本的 Apple Silicon。Desktop 没有 Intel 或 universal 构建，没有自动更新器，也不提供超出 Harness 开发者预览范围的兼容性承诺。

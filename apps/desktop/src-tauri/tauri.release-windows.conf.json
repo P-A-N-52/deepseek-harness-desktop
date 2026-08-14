@@ -1,0 +1,15 @@
+{
+  "build": {
+    "beforeBundleCommand": {
+      "script": "node --import tsx/esm scripts/prepare-desktop-release.ts --target x86_64-pc-windows-msvc --app-binary apps/desktop/src-tauri/target/release/dsh-desktop.exe",
+      "cwd": "../../.."
+    }
+  },
+  "bundle": {
+    "externalBin": ["binaries/dsh-desktop-runtime"],
+    "resources": {
+      "resources/runtime/**/*": "runtime/",
+      "resources/legal": "legal/"
+    }
+  }
+}

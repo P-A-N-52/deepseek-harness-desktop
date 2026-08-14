@@ -15,6 +15,8 @@ pnpm run desktop:build
 
 The development command starts the Desktop host and its local sidecar. The build command creates a release-shaped macOS application at `apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness Desktop.app`. That raw Tauri application is a packaging input, not the distributable artifact.
 
+On Windows hosts, `pnpm run desktop:build:windows` produces the same sealed sidecar and an MSI bundle (`--bundles msi`) instead. It runs the identical release-evidence generator with the `x86_64-pc-windows-msvc` target.
+
 ## Unsigned developer-preview artifact
 
 The supported distribution target is Apple Silicon macOS 13.5 or later. Desktop has no Intel or universal build, no automatic updater, and no compatibility promise beyond the Harness developer preview.

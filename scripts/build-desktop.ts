@@ -58,6 +58,11 @@ const DESKTOP_ASSET_GLOBS = [
   'node_modules/**/*.dylib',
   'node_modules/**/*.so',
   'node_modules/**/*.so.*',
+  // node-pty's Windows prebuilds load winpty.dll and spawn their ConPTY
+  // console-listener agent, so the payload DLLs and executables must be
+  // packed into the virtual scope alongside the *.node addons.
+  'node_modules/**/*.dll',
+  'node_modules/**/*.exe',
   'node_modules/**/*.wasm',
   // Includes the shipped agent-preset YAML and the Cordis preset's SKILL.md
   // files without embedding every package README in the SEA filesystem.
@@ -94,6 +99,9 @@ function tauriTargetTriple(target: SeaTarget): string {
   if (target.platform === 'macos') {
     return target.arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin'
   }
+  if (target.platform === 'win') {
+    return target.arch === 'arm64' ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-msvc'
+  }
   return target.arch === 'arm64' ? 'aarch64-unknown-linux-gnu' : 'x86_64-unknown-linux-gnu'
 }
 
@@ -121,8 +129,8 @@ function validateDesktopTarget(target: SeaTarget): void {
  * @returns package subpath resolving to its executable.
  */
 function ripgrepSpecifier(target: SeaTarget): string {
-  const platform = target.platform === 'macos' ? 'darwin' : 'linux'
-  return `@vscode/ripgrep-${platform}-${target.arch}/bin/rg`
+  const platform = target.platform === 'macos' ? 'darwin' : target.platform === 'win' ? 'win32' : 'linux'
+  return `@vscode/ripgrep-${platform}-${target.arch}/bin/${target.platform === 'win' ? 'rg.exe' : 'rg'}`
 }
 
 /**
@@ -132,8 +140,8 @@ function ripgrepSpecifier(target: SeaTarget): string {
  * @returns conventional hoisted package path.
  */
 function expectedRipgrepSource(staging: string, target: SeaTarget): string {
-  const platform = target.platform === 'macos' ? 'darwin' : 'linux'
-  return join(staging, 'node_modules', '@vscode', `ripgrep-${platform}-${target.arch}`, 'bin', 'rg')
+  const platform = target.platform === 'macos' ? 'darwin' : target.platform === 'win' ? 'win32' : 'linux'
+  return join(staging, 'node_modules', '@vscode', `ripgrep-${platform}-${target.arch}`, 'bin', target.platform === 'win' ? 'rg.exe' : 'rg')
 }
 
 /**
@@ -169,7 +177,7 @@ async function syncTauriResources(
 ): Promise<string[]> {
   const triple = tauriTargetTriple(target)
   const resourceDir = resolve(REPOSITORY_ROOT, TAURI_RESOURCE_DIR, triple)
-  const ripgrepDestination = join(resourceDir, 'rg')
+  const ripgrepDestination = join(resourceDir, target.platform === 'win' ? 'rg.exe' : 'rg')
   const helperDestination = join(resourceDir, 'spawn-helper')
   if (pipeline.cli.dryRun) {
     console.log(`${LABEL}: [dry-run] cp ${expectedRipgrepSource(pipeline.staging, target)} ${ripgrepDestination}`)
@@ -178,7 +186,7 @@ async function syncTauriResources(
   }
   await mkdir(resourceDir, { recursive: true })
   await copyFile(resolveRipgrepSource(pipeline.staging, target), ripgrepDestination)
-  await chmod(ripgrepDestination, 0o755)
+  if (target.platform !== 'win') await chmod(ripgrepDestination, 0o755)
   if (spawnHelper === undefined) return [ripgrepDestination]
   await copyFile(spawnHelper, helperDestination)
   await chmod(helperDestination, 0o755)
@@ -231,7 +239,7 @@ async function main(): Promise<void> {
     entryBin: ENTRY_BIN,
     staging: resolve(REPOSITORY_ROOT, DESKTOP_STAGING_DIR),
     outputDir: resolve(REPOSITORY_ROOT, TAURI_BINARIES_DIR),
-    outputName: target => `${SIDECAR_BASENAME}-${tauriTargetTriple(target)}`,
+    outputName: target => `${SIDECAR_BASENAME}-${tauriTargetTriple(target)}${target.platform === 'win' ? '.exe' : ''}`,
     assets: DESKTOP_ASSET_GLOBS,
     spawnHelperOutput: target => resolve(REPOSITORY_ROOT, DESKTOP_HELPER_DIR, `${SIDECAR_BASENAME}-${tauriTargetTriple(target)}-spawn-helper`),
   }, cli)

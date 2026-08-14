@@ -336,9 +336,11 @@ describe('Desktop release preparation', () => {
     expect(() => lockedSeaPacker(root)).toThrow('must contain exactly one sha512 SRI digest')
   })
 
-  it('maps supported Tauri triples to their Mach-O architectures', () => {
+  it('maps supported Tauri triples to their native architectures', () => {
     expect(desktopArchitecture('aarch64-apple-darwin')).toBe('arm64')
     expect(desktopArchitecture('x86_64-apple-darwin')).toBe('x86_64')
+    expect(desktopArchitecture('aarch64-pc-windows-msvc')).toBe('arm64')
+    expect(desktopArchitecture('x86_64-pc-windows-msvc')).toBe('x86_64')
     expect(() => desktopArchitecture('universal-apple-darwin')).toThrow('unsupported Desktop target')
   })
 })

@@ -635,6 +635,16 @@ function collectDesktopCargoComponents(): DesktopCargoComponent[] {
     ...cargoDependencyNames(manifest, 'dependencies'),
     ...cargoDependencyNames(manifest, 'build-dependencies'),
   ])
+  // Target-specific dependencies still ship in their platform's bundle, so the
+  // notices component set is the union across every [target.<cfg>] section.
+  const targets = optionalTomlTable(manifest.target, 'Cargo.toml [target]')
+  for (const [cfg, section] of Object.entries(targets ?? {})) {
+    if (!isTomlTable(section)) {
+      throw new Error(`gen-third-party-notices: Cargo.toml [target.${cfg}] must be a table.`)
+    }
+    for (const name of cargoDependencyNames(section, 'dependencies')) direct.add(name)
+    for (const name of cargoDependencyNames(section, 'build-dependencies')) direct.add(name)
+  }
   const expected = Object.keys(DESKTOP_CARGO_COMPONENTS)
   const unexpected = [...direct].filter(name => !(name in DESKTOP_CARGO_COMPONENTS))
   const missing = expected.filter(name => !direct.has(name))

@@ -3,11 +3,18 @@
 mod runtime;
 
 use runtime::{RuntimeEvent, RuntimeLaunch, RuntimeProcess};
-use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGTERM};
+#[cfg(unix)]
+use signal_hook::consts::signal::SIGHUP;
+use signal_hook::consts::signal::{SIGINT, SIGTERM};
+#[cfg(unix)]
 use signal_hook::iterator::Signals;
 use std::ffi::OsString;
 use std::path::Path;
 use std::sync::atomic::{AtomicU8, Ordering};
+#[cfg(windows)]
+use std::sync::atomic::AtomicBool;
+#[cfg(windows)]
+use std::time::Duration;
 use std::sync::{mpsc, Arc, Mutex, RwLock};
 use std::thread;
 use tauri::webview::WebviewWindowBuilder;
@@ -168,14 +175,43 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn install_termination_signals(handle: AppHandle) -> std::io::Result<()> {
-    let mut signals = Signals::new([SIGHUP, SIGINT, SIGTERM])?;
+    let mut signals = Signals::new(termination_signals())?;
     thread::spawn(move || {
         for _signal in signals.forever() {
             begin_shutdown(handle.clone());
         }
     });
     Ok(())
+}
+
+#[cfg(windows)]
+fn install_termination_signals(handle: AppHandle) -> std::io::Result<()> {
+    // signal-hook's blocking iterator is Unix-only; on Windows a polled
+    // atomic flag is the supported registration path.
+    let stop = Arc::new(AtomicBool::new(false));
+    for signal in termination_signals() {
+        signal_hook::flag::register(signal, Arc::clone(&stop))?;
+    }
+    thread::spawn(move || {
+        while !stop.load(Ordering::Acquire) {
+            thread::sleep(Duration::from_millis(100));
+        }
+        begin_shutdown(handle.clone());
+    });
+    Ok(())
+}
+
+/// SIGHUP has no Windows peer; SIGINT/SIGTERM are the portable set.
+#[cfg(unix)]
+fn termination_signals() -> [i32; 3] {
+    [SIGHUP, SIGINT, SIGTERM]
+}
+
+#[cfg(windows)]
+fn termination_signals() -> [i32; 2] {
+    [SIGINT, SIGTERM]
 }
 
 fn begin_shutdown(handle: AppHandle) {
@@ -230,7 +266,7 @@ fn runtime_launch(app: &tauri::App) -> Result<RuntimeLaunch, String> {
             )],
         })
     }
-    #[cfg(not(debug_assertions))]
+    #[cfg(all(not(debug_assertions), unix))]
     {
         let executable = std::env::current_exe().map_err(|error| error.to_string())?;
         let sidecar = executable
@@ -263,6 +299,34 @@ fn runtime_launch(app: &tauri::App) -> Result<RuntimeLaunch, String> {
             ],
         })
     }
+    #[cfg(all(not(debug_assertions), windows))]
+    {
+        let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+        let sidecar = executable
+            .parent()
+            .ok_or_else(|| "desktop executable has no parent directory".to_owned())?
+            .join("dsh-desktop-runtime.exe");
+        let resource_dir = app
+            .path()
+            .resource_dir()
+            .map_err(|error| error.to_string())?;
+        let ripgrep = resource_dir.join("runtime/rg.exe");
+        for path in [&sidecar, &ripgrep] {
+            require_executable(path)?;
+        }
+        Ok(RuntimeLaunch {
+            program: sidecar.into_os_string(),
+            args: Vec::new(),
+            cwd,
+            env: vec![
+                (
+                    OsString::from("DSH_DESKTOP_OWN_PROCESS_GROUP"),
+                    OsString::from("1"),
+                ),
+                (OsString::from("DSH_RIPGREP_PATH"), ripgrep.into_os_string()),
+            ],
+        })
+    }
 }
 
 #[cfg(debug_assertions)]
@@ -285,13 +349,24 @@ fn debug_runtime_args(repository: &Path) -> Vec<OsString> {
     ]
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), unix))]
 fn require_executable(path: &Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
     let metadata = path
         .metadata()
         .map_err(|error| format!("required Desktop runtime file is unavailable: {error}"))?;
     if !metadata.is_file() || metadata.permissions().mode() & 0o111 == 0 {
+        return Err("required Desktop runtime file is not executable".to_owned());
+    }
+    Ok(())
+}
+
+#[cfg(all(not(debug_assertions), windows))]
+fn require_executable(path: &Path) -> Result<(), String> {
+    let metadata = path
+        .metadata()
+        .map_err(|error| format!("required Desktop runtime file is unavailable: {error}"))?;
+    if !metadata.is_file() {
         return Err("required Desktop runtime file is not executable".to_owned());
     }
     Ok(())

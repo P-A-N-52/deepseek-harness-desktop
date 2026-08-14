@@ -1,5 +1,5 @@
 /**
- * Materialize the legal and supply-chain evidence that a macOS Desktop bundle
+ * Materialize the legal and supply-chain evidence that a Desktop bundle
  * carries beside its native runtime artifacts.
  *
  * The script deliberately derives the npm document from the lockfile and the
@@ -9,7 +9,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, globSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { closeSync, existsSync, globSync, openSync, readFileSync, readSync, readdirSync, statSync } from 'node:fs'
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, posix, relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
@@ -47,7 +47,7 @@ export interface RuntimeArtifact {
   readonly size: number
   /** Lowercase SHA-256 digest of the exact artifact bytes. */
   readonly buildSha256: string
-  /** Deployment target reported by the artifact's Mach-O load commands. */
+  /** Deployment floor reported by the artifact's native headers ('n/a' for PE targets). */
   readonly minimumMacos: string
 }
 
@@ -65,7 +65,7 @@ export interface RuntimeManifest {
   readonly commit: string
   /** Whether the checked-out source had uncommitted changes. */
   readonly sourceDirty: boolean | 'unknown'
-  /** macOS target information proven from the artifact filenames and Mach-O. */
+  /** Target information proven from the artifact filenames and native headers. */
   readonly target: {
     readonly triple: string
     readonly architecture: string
@@ -215,11 +215,19 @@ function requiredString(value: unknown, location: string): string {
   return value
 }
 
-/** Decode one desktop target triple into its Darwin architecture. */
+/** Decode one desktop target triple into its Apple or Windows architecture. */
 export function desktopArchitecture(target: string): string {
-  if (target === 'aarch64-apple-darwin') return 'arm64'
-  if (target === 'x86_64-apple-darwin') return 'x86_64'
-  throw new Error(`${LABEL}: unsupported Desktop target ${JSON.stringify(target)}; expected aarch64-apple-darwin or x86_64-apple-darwin.`)
+  if (target === 'aarch64-apple-darwin' || target === 'aarch64-pc-windows-msvc') return 'arm64'
+  if (target === 'x86_64-apple-darwin' || target === 'x86_64-pc-windows-msvc') return 'x86_64'
+  throw new Error(
+    `${LABEL}: unsupported Desktop target ${JSON.stringify(target)}; `
+    + 'expected aarch64-apple-darwin, x86_64-apple-darwin, aarch64-pc-windows-msvc, or x86_64-pc-windows-msvc.',
+  )
+}
+
+/** Map one verified Desktop target triple to its SEA platform tag. */
+function seaPlatformFor(target: string): 'win' | 'macos' {
+  return target.endsWith('-pc-windows-msvc') ? 'win' : 'macos'
 }
 
 /** Escape one npm package identity for a Package URL. */
@@ -772,8 +780,8 @@ function digest(path: string, role: RuntimeArtifact['role']): RuntimeArtifact {
   }
 }
 
-/** Run a macOS inspection command, preserving a useful release diagnostic. */
-function macosCommand(command: string, args: readonly string[]): string {
+/** Run a host inspection command, preserving a useful release diagnostic. */
+function hostCommand(command: string, args: readonly string[]): string {
   try {
     return execFileSync(command, args, {
       cwd: ROOT,
@@ -786,17 +794,61 @@ function macosCommand(command: string, args: readonly string[]): string {
   }
 }
 
-/** Assert that an artifact's fat/single-architecture Mach-O slice matches target. */
-function verifyArchitecture(path: string, architecture: string): void {
-  const output = macosCommand('lipo', ['-archs', resolve(ROOT, path)]).trim().split(/\s+/)
+/** Assert that an artifact's PE COFF machine matches the target architecture. */
+function verifyPeArchitecture(path: string, architecture: string): void {
+  const absolute = resolve(ROOT, path)
+  const handle = openSync(absolute, 'r')
+  try {
+    const header = Buffer.alloc(0x40)
+    if (readSync(handle, header, 0, header.length, 0) !== header.length || header.readUInt16LE(0) !== 0x5A4D) {
+      throw new Error(`${LABEL}: ${path} must be a PE executable, got no MZ magic.`)
+    }
+    const peOffset = header.readUInt32LE(0x3C)
+    const signatureAndMachine = Buffer.alloc(6)
+    const readBytes = readSync(handle, signatureAndMachine, 0, signatureAndMachine.length, peOffset)
+    if (readBytes !== signatureAndMachine.length || signatureAndMachine.toString('latin1', 0, 4) !== 'PE\u0000\u0000') {
+      throw new Error(`${LABEL}: ${path} must be a PE executable, got no PE signature.`)
+    }
+    const machine = signatureAndMachine.readUInt16LE(4)
+    const expected = architecture === 'x86_64' ? 0x8664 : 0xAA64
+    if (machine !== expected) {
+      throw new Error(`${LABEL}: ${path} must be ${architecture}; got COFF machine 0x${machine.toString(16).toUpperCase()}.`)
+    }
+  } finally {
+    closeSync(handle)
+  }
+}
+
+/**
+ * Assert that one artifact's native header matches the Desktop target.
+ * @param path - repository-relative artifact path.
+ * @param target - Desktop target triple accepted by {@link desktopArchitecture}.
+ */
+function verifyArchitecture(path: string, target: string): void {
+  const architecture = desktopArchitecture(target)
+  if (target.endsWith('-pc-windows-msvc')) {
+    verifyPeArchitecture(path, architecture)
+    return
+  }
+  const output = hostCommand('lipo', ['-archs', resolve(ROOT, path)]).trim().split(/\s+/)
   if (output.length !== 1 || output[0] !== architecture) {
     throw new Error(`${LABEL}: ${path} must be thin ${architecture}; got ${output.join(', ') || 'none'}.`)
   }
 }
 
-/** Extract the application Mach-O minimum macOS version. */
+/** Extract the application Mach-O minimum macOS version; PE artifacts have no macOS floor. */
 function minimumMacos(path: string): string {
-  const output = macosCommand('otool', ['-l', resolve(ROOT, path)])
+  const absolute = resolve(ROOT, path)
+  const handle = openSync(absolute, 'r')
+  try {
+    const magic = Buffer.alloc(2)
+    if (readSync(handle, magic, 0, magic.length, 0) === magic.length && magic.readUInt16LE(0) === 0x5A4D) {
+      return 'n/a'
+    }
+  } finally {
+    closeSync(handle)
+  }
+  const output = hostCommand('otool', ['-l', absolute])
   const modern = /cmd LC_BUILD_VERSION[\s\S]*?\n\s*minos\s+([^\s]+)/.exec(output)?.[1]
   if (modern !== undefined) return modern
   const legacy = /cmd LC_VERSION_MIN_MACOSX[\s\S]*?\n\s*version\s+([^\s]+)/.exec(output)?.[1]
@@ -908,7 +960,7 @@ function seaProvenance(target: string): {
     },
   }
   const arch = desktopArchitecture(target) === 'arm64' ? 'arm64' : 'x64'
-  const identity = seaRuntimeArchive(SeaTarget.parse(`${SEA_NODE_RANGE}-macos-${arch}`, LABEL))
+  const identity = seaRuntimeArchive(SeaTarget.parse(`${SEA_NODE_RANGE}-${seaPlatformFor(target)}-${arch}`, LABEL))
   const expectedPacker = lockedSeaPacker()
   if (
     provenance.target !== target
@@ -951,6 +1003,23 @@ function configuredMinimumMacos(): string {
   return requiredString(macos.minimumSystemVersion, 'Desktop tauri.conf.json.bundle.macOS.minimumSystemVersion')
 }
 
+/** Highest proven macOS deployment floor across artifacts, or 'unknown'. */
+function minimumMacosFloor(artifacts: readonly RuntimeArtifact[]): string {
+  const knownMinimums = artifacts
+    .map(artifact => artifact.minimumMacos)
+    .filter((value): value is string => value !== 'unknown')
+  const minimum = knownMinimums.length === artifacts.length
+    ? knownMinimums.reduce((highest, value) => compareMacos(value, highest) > 0 ? value : highest)
+    : 'unknown'
+  const configuredMinimum = configuredMinimumMacos()
+  if (minimum !== 'unknown' && compareMacos(minimum, configuredMinimum) !== 0) {
+    throw new Error(
+      `${LABEL}: executable deployment floor is macOS ${minimum}, but tauri.conf.json declares ${configuredMinimum}.`,
+    )
+  }
+  return minimum
+}
+
 /** Read and verify the shared dsh version before it enters release evidence. */
 function releaseVersion(): RuntimeManifest['version'] {
   const manifest = table(JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')) as unknown, 'package.json')
@@ -980,6 +1049,15 @@ interface NodeLicense {
   readonly sha256: string
 }
 
+/** Resolve a host tar that reads both gzip tarballs and the official win zip. */
+function hostTar(): string {
+  // Git Bash shadows Windows' bsdtar with GNU tar, which cannot read zip
+  // archives, so the System32 bsdtar is selected explicitly on win32.
+  return process.platform === 'win32'
+    ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe')
+    : 'tar'
+}
+
 /** Read Node's complete license text from the same verified build cache used by pkg. */
 function nodeLicense(target: string): NodeLicense {
   const provenance = seaProvenance(target)
@@ -987,53 +1065,49 @@ function nodeLicense(target: string): NodeLicense {
     throw new Error(`${LABEL}: Node SEA provenance is required before extracting NODE_LICENSE.`)
   }
   const arch = desktopArchitecture(target) === 'arm64' ? 'arm64' : 'x64'
-  const identity = seaRuntimeArchive(SeaTarget.parse(`${SEA_NODE_RANGE}-macos-${arch}`, LABEL))
+  const identity = seaRuntimeArchive(SeaTarget.parse(`${SEA_NODE_RANGE}-${seaPlatformFor(target)}-${arch}`, LABEL))
   const archive = seaRuntimeArchiveCachePath(resolve(ROOT, DESKTOP_CLOSURE, '.artifacts', 'sea'), identity)
   if (!existsSync(archive)) throw new Error(`${LABEL}: verified Node build cache is missing: ${lockPath(relative(ROOT, archive))}.`)
   verifyNodeLicenseArchive(archive, identity, provenance.value)
-  const directory = identity.filename.slice(0, -'.tar.gz'.length)
-  const content = macosCommand('tar', ['-xOzf', archive, `${directory}/LICENSE`])
+  const directory = identity.filename.replace(/\.(?:tar\.gz|zip)$/u, '')
+  const content = hostCommand(hostTar(), ['-xOzf', archive, `${directory}/LICENSE`])
   return {
     content,
     sha256: createHash('sha256').update(content, 'utf8').digest('hex'),
   }
 }
 
-/** Build the runtime manifest for one completed macOS Desktop target. */
+/** Build the runtime manifest for one completed Desktop target. */
 export function runtimeManifest(target: string, nodeLicenseSha256: string, appBinary?: string): RuntimeManifest {
   if (!/^[0-9a-f]{64}$/u.test(nodeLicenseSha256)) {
     throw new Error(`${LABEL}: NODE_LICENSE SHA-256 must be a lowercase digest.`)
   }
   const architecture = desktopArchitecture(target)
-  const sidecarPath = `${DESKTOP_ROOT}/binaries/${SIDECAR_BASENAME}-${target}`
+  const windows = target.endsWith('-pc-windows-msvc')
+  const sidecarPath = `${DESKTOP_ROOT}/binaries/${SIDECAR_BASENAME}-${target}${windows ? '.exe' : ''}`
   const resourceRoot = `${DESKTOP_ROOT}/resources/runtime/${target}`
-  const appPath = appBinary === undefined ? `${DESKTOP_ROOT}/target/release/dsh-desktop` : appBinary
-  verifyArchitecture(sidecarPath, architecture)
-  verifyArchitecture(`${resourceRoot}/rg`, architecture)
-  verifyArchitecture(`${resourceRoot}/spawn-helper`, architecture)
-  verifyArchitecture(appPath, architecture)
+  const appPath = appBinary === undefined
+    ? `${DESKTOP_ROOT}/target/release/dsh-desktop${windows ? '.exe' : ''}`
+    : appBinary
+  const artifactPaths = windows
+    ? [
+      { path: appPath, role: 'host' as const },
+      { path: sidecarPath, role: 'sidecar' as const },
+      { path: `${resourceRoot}/rg.exe`, role: 'ripgrep' as const },
+    ]
+    : [
+      { path: appPath, role: 'host' as const },
+      { path: sidecarPath, role: 'sidecar' as const },
+      { path: `${resourceRoot}/rg`, role: 'ripgrep' as const },
+      { path: `${resourceRoot}/spawn-helper`, role: 'spawn-helper' as const },
+    ]
+  for (const artifact of artifactPaths) verifyArchitecture(artifact.path, target)
   const commit = gitFact(['rev-parse', 'HEAD'])
   const dirty = gitFact(['status', '--porcelain=v1'])
   const provenance = seaProvenance(target)
   const packer = lockedSeaPacker()
-  const artifacts = [
-    digest(appPath, 'host'),
-    digest(sidecarPath, 'sidecar'),
-    digest(`${resourceRoot}/rg`, 'ripgrep'),
-    digest(`${resourceRoot}/spawn-helper`, 'spawn-helper'),
-  ] satisfies RuntimeArtifact[]
-  const knownMinimums = artifacts
-    .map(artifact => artifact.minimumMacos)
-    .filter((value): value is string => value !== 'unknown')
-  const minimum = knownMinimums.length === artifacts.length
-    ? knownMinimums.reduce((highest, value) => compareMacos(value, highest) > 0 ? value : highest)
-    : 'unknown'
-  const configuredMinimum = configuredMinimumMacos()
-  if (minimum !== 'unknown' && compareMacos(minimum, configuredMinimum) !== 0) {
-    throw new Error(
-      `${LABEL}: executable deployment floor is macOS ${minimum}, but tauri.conf.json declares ${configuredMinimum}.`,
-    )
-  }
+  const artifacts = artifactPaths.map(artifact => digest(artifact.path, artifact.role)) satisfies RuntimeArtifact[]
+  const minimum = windows ? 'n/a' : minimumMacosFloor(artifacts)
   const blockers = [
     ...(commit === undefined ? ['repository commit is unknown'] : []),
     ...(dirty === undefined ? ['repository dirty state is unknown'] : dirty === '' ? [] : ['repository has uncommitted changes']),
@@ -1071,10 +1145,13 @@ async function writeGenerated(path: string, content: string, check: boolean): Pr
   await writeFile(path, content)
 }
 
-/** Infer a completed macOS target from exactly one sidecar filename. */
+/** Infer a completed target from exactly one sidecar filename. */
 function inferTarget(): string {
-  const candidates = globSync(`${DESKTOP_ROOT}/binaries/${SIDECAR_BASENAME}-*-apple-darwin`, { cwd: ROOT })
-    .map(path => basename(path).slice(`${SIDECAR_BASENAME}-`.length))
+  const candidates = [
+    ...globSync(`${DESKTOP_ROOT}/binaries/${SIDECAR_BASENAME}-*-apple-darwin`, { cwd: ROOT }),
+    ...globSync(`${DESKTOP_ROOT}/binaries/${SIDECAR_BASENAME}-*-pc-windows-msvc.exe`, { cwd: ROOT }),
+  ]
+    .map(path => basename(path).slice(`${SIDECAR_BASENAME}-`.length).replace(/\.exe$/u, ''))
     .sort()
   if (candidates.length !== 1 || candidates[0] === undefined) {
     throw new Error(`${LABEL}: expected exactly one completed Desktop sidecar target; pass --target explicitly.`)
@@ -1088,8 +1165,8 @@ function usage(): string {
   return [
     'Usage: pnpm exec tsx scripts/prepare-desktop-release.ts [flags]',
     '',
-    '  --target=<triple>       macOS target, inferred from one completed sidecar when omitted.',
-    '  --app-binary=<path>     built Desktop host to inspect for architecture and minimum macOS.',
+    '  --target=<triple>       Desktop target, inferred from one completed sidecar when omitted.',
+    '  --app-binary=<path>     built Desktop host to inspect for architecture and native headers.',
     '  --check                 verify generated legal resources without rewriting them.',
     '  --release               reject unknown SEA provenance, unlocked packers, dirty source, or unknown minOS.',
     '  --help                  print this help.',
@@ -1098,7 +1175,7 @@ function usage(): string {
 
 /** Materialize all generated Desktop legal resources for a completed target. */
 export async function prepareDesktopRelease(options: {
-  /** macOS target triple, inferred from the sidecar if omitted. */
+  /** Desktop target triple, inferred from the sidecar if omitted. */
   readonly target?: string
   /** Absolute or repository-relative app binary to inspect. */
   readonly appBinary?: string

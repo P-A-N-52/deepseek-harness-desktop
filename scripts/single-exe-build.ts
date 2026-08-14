@@ -29,7 +29,7 @@ export const SEA_PKG_SPEC = '@yao-pkg/pkg@6.21.0'
 /** pnpm release whose deploy output and policy metadata this pipeline validates. */
 export const AUDITED_PNPM_VERSION = '11.7.0'
 
-const PLATFORMS = ['linux', 'macos'] as const
+const PLATFORMS = ['linux', 'macos', 'win'] as const
 const ARCHES = ['x64', 'arm64'] as const
 const SEA_PKG_CACHE_ENVIRONMENT = 'DSH_PKG_SEA_CACHE_DIR'
 const REVIEWED_DEPLOY_BUILD = {
@@ -72,6 +72,8 @@ const SEA_NODE_ARCHIVE_SHA256: Readonly<Record<`${SeaPlatform}-${SeaArch}`, stri
   'linux-x64': 'f625d97cd707df4ff96254916fbc5ff014f09c09effe5a1e0ca8f6d41a8789d4',
   'macos-arm64': '8294b7aa9b03997481c06babf1e8b270c859358f27da57a11509afe537ac381d',
   'macos-x64': 'd1b5e999db158c62fe8f7267a4476b035d8bd93b1a605bac24a3f0dd166e3316',
+  'win-arm64': '8502f4a50b458d4cc38ed8f2001556c2cd239d464920f74017926ccb1e1c157f',
+  'win-x64': '57f71ab3652e797d84acddc79c81cc9ff1c6ddb2a1974cdb83f00fee9bff4c73',
 }
 
 function isPlatform(value: string): value is SeaPlatform {
@@ -128,7 +130,13 @@ export class SeaTarget {
    * @returns the host target.
    */
   static host(label: string): SeaTarget {
-    const platform = process.platform === 'darwin' ? 'macos' : process.platform === 'linux' ? 'linux' : undefined
+    const platform = process.platform === 'darwin'
+      ? 'macos'
+      : process.platform === 'win32'
+        ? 'win'
+        : process.platform === 'linux'
+          ? 'linux'
+          : undefined
     if (platform === undefined) {
       throw new Error(`${label}: unsupported host platform ${process.platform}; pass --targets explicitly.`)
     }
@@ -294,8 +302,10 @@ export function seaRuntimeArchive(target: SeaTarget): SeaRuntimeArchive {
     throw new Error(`SEA archive: ${target.spec} does not use the pinned ${SEA_NODE_RANGE} runtime.`)
   }
   const version = target.nodeRange.slice('node'.length)
-  const platform = target.platform === 'macos' ? 'darwin' : 'linux'
-  const filename = `node-v${version}-${platform}-${target.arch}.tar.gz`
+  const platform = target.platform === 'macos' ? 'darwin' : target.platform
+  const filename = platform === 'win'
+    ? `node-v${version}-win-${target.arch}.zip`
+    : `node-v${version}-${platform}-${target.arch}.tar.gz`
   const checksums: Readonly<Record<string, string>> = SEA_NODE_ARCHIVE_SHA256
   const sha256 = checksums[`${target.platform}-${target.arch}`]
   if (sha256 === undefined) throw new Error(`SEA archive: no official checksum is pinned for ${target.spec}.`)
@@ -620,8 +630,21 @@ export function seaArtifactPaths(artifact: SeaArtifact): string[] {
     : [artifact.executable, artifact.spawnHelper]
 }
 
-function pnpmBin(): string {
-  return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+/**
+ * Resolve the pnpm launcher and its fixed leading arguments for this host.
+ * @param label - product prefix used in errors.
+ * @returns a Node-launchable command selecting the pinned pnpm.
+ */
+function pnpmCommand(label: string): { command: string; args: string[] } {
+  if (process.platform !== 'win32') return { command: 'pnpm', args: [] }
+  // Windows cannot CreateProcess a .cmd shim, and corepack's own shim is one
+  // too, so the corepack JS entry is invoked through the host Node instead.
+  // A global `npm i -g pnpm` install is the same shape.
+  const corepackJs = join(dirname(process.execPath), 'node_modules', 'corepack', 'dist', 'corepack.js')
+  if (existsSync(corepackJs)) return { command: process.execPath, args: [corepackJs, 'pnpm'] }
+  const globalPnpm = join(process.env.APPDATA ?? '', 'npm', 'node_modules', 'pnpm', 'bin', 'pnpm.cjs')
+  if (existsSync(globalPnpm)) return { command: process.execPath, args: [globalPnpm] }
+  throw new Error(`${label}: cannot resolve a Node-launchable pnpm on Windows; install pnpm or corepack.`)
 }
 
 /**
@@ -752,7 +775,7 @@ export class SingleExeBuild {
   private readonly completedSeaRuntimes = new Map<string, VerifiedSeaRuntime>()
 
   /** Exact pnpm launcher after its version and repository declaration agree. */
-  private pnpmCommand: Promise<string> | undefined
+  private pnpmLaunch: Promise<{ command: string; args: string[] }> | undefined
 
   /**
    * Construct one product pipeline.
@@ -957,6 +980,8 @@ export class SingleExeBuild {
   /**
    * Place the target node-pty addon in the staged closure. Linux npm installs
    * it from source, while a portable deploy contains only locked package files.
+   * Windows and macOS ship their prebuilds inside the node-pty package, which
+   * pnpm deploy retains, so only the source-built Linux addon needs copying.
    * @param target - pkg target whose native addon is staged.
    */
   private async prepareNativePty(target: SeaTarget): Promise<void> {
@@ -1003,16 +1028,16 @@ export class SingleExeBuild {
     return cacheRoot
   }
 
-  /** Run pnpm only after the resolved executable matches the audited release. */
+  /** Run pnpm only after the resolved launcher matches the audited release. */
   private async runPnpm(label: string, args: string[]): Promise<void> {
-    const command = this.cli.dryRun
-      ? pnpmBin()
-      : await (this.pnpmCommand ??= this.verifyPnpm())
-    await this.run(label, command, args)
+    const launch = this.cli.dryRun
+      ? pnpmCommand(this.spec.label)
+      : await (this.pnpmLaunch ??= this.verifyPnpm())
+    await this.run(label, launch.command, [...launch.args, ...args])
   }
 
-  /** Resolve the current PATH's pnpm and verify it against the repository pin. */
-  private async verifyPnpm(): Promise<string> {
+  /** Resolve the current pnpm launcher and verify it against the repository pin. */
+  private async verifyPnpm(): Promise<{ command: string; args: string[] }> {
     const packageManifest = JSON.parse(await readFile(join(REPOSITORY_ROOT, 'package.json'), 'utf8')) as {
       packageManager?: unknown
     }
@@ -1020,22 +1045,22 @@ export class SingleExeBuild {
     if (packageManifest.packageManager !== declared) {
       throw new Error(`${this.spec.label}: root packageManager must be ${declared}.`)
     }
-    const command = pnpmBin()
+    const launch = pnpmCommand(this.spec.label)
     const version = await new Promise<string>((resolvePromise, reject) => {
-      execFile(command, ['--version'], {
+      execFile(launch.command, [...launch.args, '--version'], {
         cwd: REPOSITORY_ROOT,
         encoding: 'utf8',
         env: { ...process.env, CI: 'true' },
       }, (error, stdout) => {
         if (error !== null) {
-          reject(new Error(`${this.spec.label}: cannot execute ${command} --version: ${error.message}.`))
+          reject(new Error(`${this.spec.label}: cannot execute ${formatCommand(launch.command, launch.args)} --version: ${error.message}.`))
           return
         }
         resolvePromise(stdout.trim())
       })
     })
     assertAuditedPnpmVersion(version)
-    return command
+    return launch
   }
 
   /**

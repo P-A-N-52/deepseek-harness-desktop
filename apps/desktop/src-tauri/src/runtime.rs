@@ -1,5 +1,6 @@
 //! Sealed Web-sidecar process ownership for the Desktop shell.
 
+#[cfg(unix)]
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::io::{BufRead, BufReader};
@@ -117,6 +118,7 @@ impl RuntimeProcess {
     }
 
     /// Request graceful shutdown once, then force only the owned tree after the deadline.
+    #[cfg(unix)]
     pub(crate) fn stop(&self) {
         let first_request = !self.stopping.swap(true, Ordering::AcqRel);
         if self.has_exited() {
@@ -124,6 +126,21 @@ impl RuntimeProcess {
         }
         if first_request {
             signal_process_group(self.pid, libc::SIGTERM);
+        }
+        if self.wait_for_exit(self.timing.shutdown_grace) {
+            return;
+        }
+        force_kill_tree(self.pid);
+        let _ = self.wait_for_exit(self.timing.force_kill_wait);
+    }
+
+    /// No portable group signal exists on Windows and the sidecar has no
+    /// console, so shutdown waits out the grace period and force-kills.
+    #[cfg(windows)]
+    pub(crate) fn stop(&self) {
+        let _ = self.stopping.swap(true, Ordering::AcqRel);
+        if self.has_exited() {
+            return;
         }
         if self.wait_for_exit(self.timing.shutdown_grace) {
             return;
@@ -186,6 +203,7 @@ fn monitor_child(
         if !ready && Instant::now() >= deadline {
             failed = true;
             let _ = events.send(RuntimeEvent::Unavailable);
+            #[cfg(unix)]
             signal_process_group(pid, libc::SIGTERM);
         }
 
@@ -201,6 +219,7 @@ fn monitor_child(
                         failed = true;
                         let _ = events.send(RuntimeEvent::Unavailable);
                     }
+                    #[cfg(unix)]
                     signal_process_group(pid, libc::SIGTERM);
                 }
             },
@@ -209,6 +228,7 @@ fn monitor_child(
                     failed = true;
                     let _ = events.send(RuntimeEvent::Unavailable);
                 }
+                #[cfg(unix)]
                 signal_process_group(pid, libc::SIGTERM);
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -252,11 +272,23 @@ pub(crate) fn parse_ready_line(line: &str) -> Option<Result<Url, ()>> {
     Some(if valid { Ok(parsed) } else { Err(()) })
 }
 
+#[cfg(unix)]
 fn configure_process_group(command: &mut Command) {
     use std::os::unix::process::CommandExt;
     command.process_group(0);
 }
 
+#[cfg(windows)]
+fn configure_process_group(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    // CREATE_NEW_PROCESS_GROUP detaches the sidecar from the host console;
+    // CREATE_NO_WINDOW keeps a console-less child from opening a window.
+    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
+}
+
+#[cfg(unix)]
 fn signal_process_group(pid: u32, signal: libc::c_int) {
     let Ok(group) = libc::pid_t::try_from(pid) else {
         return;
@@ -268,6 +300,7 @@ fn signal_process_group(pid: u32, signal: libc::c_int) {
     }
 }
 
+#[cfg(unix)]
 fn force_kill_tree(root: u32) {
     for pid in descendant_pids(root).into_iter().rev() {
         let Ok(pid) = libc::pid_t::try_from(pid) else {
@@ -282,6 +315,20 @@ fn force_kill_tree(root: u32) {
     signal_process_group(root, libc::SIGKILL);
 }
 
+#[cfg(windows)]
+fn force_kill_tree(root: u32) {
+    let pid = root.to_string();
+    // taskkill /T terminates the whole tree; a missing process is an ordinary
+    // exit race with the monitor reaping an exited child.
+    let _ = Command::new("taskkill")
+        .args(["/PID", pid.as_str(), "/T", "/F"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+#[cfg(unix)]
 fn descendant_pids(root: u32) -> Vec<u32> {
     let Ok(output) = Command::new("/bin/ps")
         .args(["-axo", "pid=,ppid="])
@@ -319,16 +366,6 @@ fn descendant_pids(root: u32) -> Vec<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
-
-    fn shell_launch(script: &str) -> RuntimeLaunch {
-        RuntimeLaunch {
-            program: OsString::from("/bin/sh"),
-            args: vec![OsString::from("-c"), OsString::from(script)],
-            cwd: Path::new("/").to_path_buf(),
-            env: Vec::new(),
-        }
-    }
 
     fn test_timing() -> RuntimeTiming {
         RuntimeTiming {
@@ -362,57 +399,104 @@ mod tests {
         assert!(parse_ready_line("ordinary log output").is_none());
     }
 
-    #[test]
-    fn graceful_stop_is_idempotent_and_reaps_the_child() {
-        let (events_tx, events_rx) = mpsc::channel();
-        let process = RuntimeProcess::spawn_with_timing(
-            shell_launch("trap 'exit 0' TERM; printf 'dsh web: http://127.0.0.1:43210\\n'; while :; do sleep 1; done"),
-            events_tx,
-            test_timing(),
-        )
-        .expect("spawn fixture");
-        assert!(matches!(
-            events_rx.recv_timeout(Duration::from_secs(1)),
-            Ok(RuntimeEvent::Ready(_))
-        ));
-        process.stop();
-        process.stop();
-        assert!(process.has_exited());
+    #[cfg(all(test, unix))]
+    mod unix {
+        use super::*;
+        use std::path::Path;
+
+        fn shell_launch(script: &str) -> RuntimeLaunch {
+            RuntimeLaunch {
+                program: OsString::from("/bin/sh"),
+                args: vec![OsString::from("-c"), OsString::from(script)],
+                cwd: Path::new("/").to_path_buf(),
+                env: Vec::new(),
+            }
+        }
+
+        #[test]
+        fn graceful_stop_is_idempotent_and_reaps_the_child() {
+            let (events_tx, events_rx) = mpsc::channel();
+            let process = RuntimeProcess::spawn_with_timing(
+                shell_launch("trap 'exit 0' TERM; printf 'dsh web: http://127.0.0.1:43210\\n'; while :; do sleep 1; done"),
+                events_tx,
+                test_timing(),
+            )
+            .expect("spawn fixture");
+            assert!(matches!(
+                events_rx.recv_timeout(Duration::from_secs(1)),
+                Ok(RuntimeEvent::Ready(_))
+            ));
+            process.stop();
+            process.stop();
+            assert!(process.has_exited());
+        }
+
+        #[test]
+        fn startup_timeout_reports_unavailable_and_terminates() {
+            let (events_tx, events_rx) = mpsc::channel();
+            let process = RuntimeProcess::spawn_with_timing(
+                shell_launch("trap 'exit 0' TERM; while :; do sleep 1; done"),
+                events_tx,
+                test_timing(),
+            )
+            .expect("spawn fixture");
+            assert!(matches!(
+                events_rx.recv_timeout(Duration::from_secs(1)),
+                Ok(RuntimeEvent::Unavailable)
+            ));
+            assert!(process.wait_for_exit(Duration::from_secs(1)));
+        }
+
+        #[test]
+        fn duplicate_ready_record_invalidates_the_runtime() {
+            let (events_tx, events_rx) = mpsc::channel();
+            let process = RuntimeProcess::spawn_with_timing(
+                shell_launch("trap 'exit 0' TERM; printf 'dsh web: http://127.0.0.1:43210\\ndsh web: http://127.0.0.1:43210\\n'; while :; do sleep 1; done"),
+                events_tx,
+                test_timing(),
+            )
+            .expect("spawn fixture");
+            assert!(matches!(
+                events_rx.recv_timeout(Duration::from_secs(1)),
+                Ok(RuntimeEvent::Ready(_))
+            ));
+            assert!(matches!(
+                events_rx.recv_timeout(Duration::from_secs(1)),
+                Ok(RuntimeEvent::Unavailable)
+            ));
+            assert!(process.wait_for_exit(Duration::from_secs(1)));
+        }
     }
 
-    #[test]
-    fn startup_timeout_reports_unavailable_and_terminates() {
-        let (events_tx, events_rx) = mpsc::channel();
-        let process = RuntimeProcess::spawn_with_timing(
-            shell_launch("trap 'exit 0' TERM; while :; do sleep 1; done"),
-            events_tx,
-            test_timing(),
-        )
-        .expect("spawn fixture");
-        assert!(matches!(
-            events_rx.recv_timeout(Duration::from_secs(1)),
-            Ok(RuntimeEvent::Unavailable)
-        ));
-        assert!(process.wait_for_exit(Duration::from_secs(1)));
-    }
+    #[cfg(all(test, windows))]
+    mod windows {
+        use super::*;
 
-    #[test]
-    fn duplicate_ready_record_invalidates_the_runtime() {
-        let (events_tx, events_rx) = mpsc::channel();
-        let process = RuntimeProcess::spawn_with_timing(
-            shell_launch("trap 'exit 0' TERM; printf 'dsh web: http://127.0.0.1:43210\\ndsh web: http://127.0.0.1:43210\\n'; while :; do sleep 1; done"),
-            events_tx,
-            test_timing(),
-        )
-        .expect("spawn fixture");
-        assert!(matches!(
-            events_rx.recv_timeout(Duration::from_secs(1)),
-            Ok(RuntimeEvent::Ready(_))
-        ));
-        assert!(matches!(
-            events_rx.recv_timeout(Duration::from_secs(1)),
-            Ok(RuntimeEvent::Unavailable)
-        ));
-        assert!(process.wait_for_exit(Duration::from_secs(1)));
+        fn cmd_launch(script: &str) -> RuntimeLaunch {
+            RuntimeLaunch {
+                program: OsString::from("cmd"),
+                args: vec![OsString::from("/C"), OsString::from(script)],
+                cwd: PathBuf::from("C:\\"),
+                env: Vec::new(),
+            }
+        }
+
+        #[test]
+        fn graceful_stop_force_kills_the_runtime_tree() {
+            let (events_tx, events_rx) = mpsc::channel();
+            let process = RuntimeProcess::spawn_with_timing(
+                cmd_launch("echo dsh web: http://127.0.0.1:43211 & ping -n 30 127.0.0.1 >nul"),
+                events_tx,
+                test_timing(),
+            )
+            .expect("spawn fixture");
+            assert!(matches!(
+                events_rx.recv_timeout(Duration::from_secs(1)),
+                Ok(RuntimeEvent::Ready(_))
+            ));
+            process.stop();
+            process.stop();
+            assert!(process.has_exited());
+        }
     }
 }

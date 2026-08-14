@@ -149,6 +149,7 @@
     "desktop:publish-dmg": "tsx scripts/publish-desktop-dmg.ts",
     "desktop:dev": "tsx scripts/run-desktop-tauri.ts dev",
     "desktop:build": "pnpm run desktop:verify-version && pnpm run verify-third-party-notices && tsx scripts/build-desktop.ts && tsx scripts/run-desktop-tauri.ts build --config src-tauri/tauri.release.conf.json --bundles app",
+    "desktop:build:windows": "pnpm run desktop:verify-version && pnpm run verify-third-party-notices && tsx scripts/build-desktop.ts && tsx scripts/run-desktop-tauri.ts build --config src-tauri/tauri.release-windows.conf.json --bundles msi",
     "postinstall": "node scripts/install-lefthook.mjs"
   },
   "devDependencies": {

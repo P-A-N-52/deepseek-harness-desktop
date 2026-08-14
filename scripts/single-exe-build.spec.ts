@@ -75,6 +75,19 @@ describe('SEA archive cache', () => {
       .toBe('8294b7aa9b03997481c06babf1e8b270c859358f27da57a11509afe537ac381d')
     expect(seaRuntimeArchive(SeaTarget.parse('node24.19.0-macos-x64', 'test')).sha256)
       .toBe('d1b5e999db158c62fe8f7267a4476b035d8bd93b1a605bac24a3f0dd166e3316')
+    expect(seaRuntimeArchive(SeaTarget.parse('node24.19.0-win-arm64', 'test')).sha256)
+      .toBe('8502f4a50b458d4cc38ed8f2001556c2cd239d464920f74017926ccb1e1c157f')
+    expect(seaRuntimeArchive(SeaTarget.parse('node24.19.0-win-x64', 'test')).sha256)
+      .toBe('57f71ab3652e797d84acddc79c81cc9ff1c6ddb2a1974cdb83f00fee9bff4c73')
+  })
+
+  it('names the official win archive as a zip and unix archives as tarballs', () => {
+    const win = seaRuntimeArchive(SeaTarget.parse('node24.19.0-win-x64', 'test'))
+    expect(win.filename).toBe('node-v24.19.0-win-x64.zip')
+    expect(win.source).toBe('https://nodejs.org/dist/v24.19.0/node-v24.19.0-win-x64.zip')
+    expect(win.checksumSource).toBe('https://nodejs.org/dist/v24.19.0/SHASUMS256.txt')
+    const macos = seaRuntimeArchive(SeaTarget.parse('node24.19.0-macos-arm64', 'test'))
+    expect(macos.filename).toBe('node-v24.19.0-darwin-arm64.tar.gz')
   })
 
   it('records the exact patched packer with the verified Node runtime', () => {

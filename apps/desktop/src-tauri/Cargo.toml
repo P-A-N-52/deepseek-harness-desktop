@@ -16,6 +16,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
-libc = "0.2"
 signal-hook = "0.3"
 tauri = { version = "2.11.3", features = [] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
