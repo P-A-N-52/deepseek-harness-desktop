@@ -29,7 +29,8 @@ import {
 const LABEL = 'prepare-desktop-release'
 const ROOT = resolve(import.meta.dirname, '..')
 const DESKTOP_ROOT = 'apps/desktop/src-tauri'
-const LEGAL_ROOT = `${DESKTOP_ROOT}/resources/legal`
+/** Repository-relative directory bundled as the Desktop legal resource root. */
+export const DESKTOP_LEGAL_RESOURCE_ROOT = `${DESKTOP_ROOT}/resources/legal`
 const DESKTOP_CLOSURE = 'native/desktop-runtime'
 const DESKTOP_DEPLOY = `${DESKTOP_CLOSURE}/.artifacts/node`
 const SIDECAR_BASENAME = 'dsh-desktop-runtime'
@@ -179,6 +180,18 @@ export interface LockedSeaPacker {
   readonly integrity: string
   /** SHA-256 of the patch pnpm applies to the packer. */
   readonly patchHash: string
+}
+
+/**
+ * Materialize the ignored legal resource directory before Tauri validates its
+ * resource configuration.
+ * @param repositoryRoot - repository containing the Desktop application.
+ * @returns absolute legal resource directory.
+ */
+export async function ensureDesktopLegalResourceRoot(repositoryRoot = ROOT): Promise<string> {
+  const legal = resolve(repositoryRoot, DESKTOP_LEGAL_RESOURCE_ROOT)
+  await mkdir(legal, { recursive: true })
+  return legal
 }
 
 /** Read a durable JSON/YAML table and reject every other value. */
@@ -1096,8 +1109,9 @@ export async function prepareDesktopRelease(options: {
 } = {}): Promise<RuntimeManifest> {
   const target = options.target ?? inferTarget()
   desktopArchitecture(target)
-  const legal = resolve(ROOT, LEGAL_ROOT)
-  if (!options.check) await mkdir(legal, { recursive: true })
+  const legal = options.check
+    ? resolve(ROOT, DESKTOP_LEGAL_RESOURCE_ROOT)
+    : await ensureDesktopLegalResourceRoot()
   const appBinary = options.appBinary === undefined
     ? undefined
     : lockPath(relative(ROOT, isAbsolute(options.appBinary) ? options.appBinary : resolve(ROOT, options.appBinary)))

@@ -9,7 +9,7 @@
     "externalBin": ["binaries/dsh-desktop-runtime"],
     "resources": {
       "resources/runtime/**/*": "runtime/",
-      "resources/legal/**/*": "legal/"
+      "resources/legal": "legal/"
     }
   }
 }

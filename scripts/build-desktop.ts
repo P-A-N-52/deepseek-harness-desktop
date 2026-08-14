@@ -19,7 +19,12 @@ import {
   parseSeaBuildCli,
   seaRuntimeProvenance,
 } from './single-exe-build.ts'
-import { lockedSeaPacker, type LockedSeaPacker } from './prepare-desktop-release.ts'
+import {
+  DESKTOP_LEGAL_RESOURCE_ROOT,
+  ensureDesktopLegalResourceRoot,
+  lockedSeaPacker,
+  type LockedSeaPacker,
+} from './prepare-desktop-release.ts'
 
 const LABEL = 'build-desktop'
 const DEPLOY_ROOT_PACKAGE = 'dsh-desktop-runtime-pkg'
@@ -233,6 +238,11 @@ async function main(): Promise<void> {
   const packer = lockedSeaPacker()
   console.log(`${LABEL}: targets: ${cli.targets.map(target => target.spec).join(', ')}`)
   console.log(`${LABEL}: staging: ${pipeline.staging}`)
+  if (cli.dryRun) {
+    console.log(`${LABEL}: [dry-run] mkdir ${resolve(REPOSITORY_ROOT, DESKTOP_LEGAL_RESOURCE_ROOT)}`)
+  } else {
+    await ensureDesktopLegalResourceRoot(REPOSITORY_ROOT)
+  }
   await pipeline.verifyClosure()
   await pipeline.build()
   await pipeline.deployStaging()

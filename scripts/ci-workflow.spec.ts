@@ -49,6 +49,44 @@ describe('Desktop CI workflow', () => {
   })
 })
 
+describe('Documentation workflow', () => {
+  it('verifies the site without retaining a Pages publication capability', () => {
+    const workflow = loadWorkflow('.github/workflows/docs-pages.yml')
+    const verify = workflowJob(workflow, 'verify')
+    if (!Array.isArray(verify.steps)) {
+      throw new TypeError('Documentation workflow must define verification steps')
+    }
+
+    expect(workflow.name).toBe('Documentation')
+    expect(workflow.permissions).toEqual({ contents: 'read' })
+    expect(workflow.concurrency).toBeUndefined()
+    if (!isRecord(workflow.jobs)) throw new TypeError('Documentation workflow must define jobs')
+    expect(workflow.jobs).not.toHaveProperty('publish')
+    expect(workflow.jobs).not.toHaveProperty('deploy')
+    expect(verify.if).toBeUndefined()
+    expect(verify.permissions).toEqual({ contents: 'read' })
+    expect(verify.steps.filter(isRecord).find(step => step.uses === 'pnpm/action-setup@v6')).toMatchObject({
+      with: {
+        dest: runnerPrivatePnpmDestination,
+        version: '11.7.0',
+      },
+    })
+    expect(verify.steps.filter(isRecord).find(step => step.name === 'Install (immutable)')).toMatchObject({
+      run: 'pnpm install --frozen-lockfile',
+    })
+    expect(verify.steps.filter(isRecord).find(step => step.name === 'Verify and build documentation')).toMatchObject({
+      env: { DOCS_BASE: '/' },
+      run: 'pnpm run doc-sync',
+    })
+    const serialized = JSON.stringify(workflow)
+    expect(serialized).not.toContain('actions/configure-pages@')
+    expect(serialized).not.toContain('actions/upload-pages-artifact@')
+    expect(serialized).not.toContain('actions/deploy-pages@')
+    expect(serialized).not.toContain('pages:')
+    expect(serialized).not.toContain('id-token:')
+  })
+})
+
 describe('CI workflow', () => {
   it('isolates every pnpm action setup destination per runner', () => {
     const workflow: unknown = yaml.load(readFileSync(resolve(root, '.github/workflows/ci.yml'), 'utf8'))

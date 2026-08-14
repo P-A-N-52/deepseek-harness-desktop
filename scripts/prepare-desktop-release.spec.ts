@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import * as yaml from 'js-yaml'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   desktopArchitecture,
   desktopNpmBom,
+  ensureDesktopLegalResourceRoot,
   lockedSeaPacker,
   verifyNodeLicenseArchive,
 } from './prepare-desktop-release.ts'
@@ -78,6 +79,22 @@ afterEach(async () => {
 })
 
 describe('Desktop release preparation', () => {
+  it('materializes the exact legal directory configured as a Tauri resource', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-desktop-legal-root-'))
+    roots.push(root)
+
+    const legal = await ensureDesktopLegalResourceRoot(root)
+    expect((await stat(legal)).isDirectory()).toBe(true)
+    expect(legal).toBe(join(root, 'apps/desktop/src-tauri/resources/legal'))
+
+    const config = JSON.parse(await readFile(
+      resolve(import.meta.dirname, '../apps/desktop/src-tauri/tauri.release.conf.json'),
+      'utf8',
+    )) as { bundle: { resources: Record<string, string> } }
+    expect(config.bundle.resources['resources/legal']).toBe('legal/')
+    expect(config.bundle.resources['resources/legal/**/*']).toBeUndefined()
+  })
+
   it('walks the physical SEA deployment with optional and peer resolution', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-desktop-sbom-'))
     roots.push(root)
