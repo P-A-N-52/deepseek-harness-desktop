@@ -8,14 +8,14 @@ DeepSeek Harness Desktop 是 [DeepSeek Harness](https://github.com/deepseek-ai/d
 
 ## Desktop 状态
 
-首日实现以 Apple Silicon macOS 为目标。本地构建产出 ad-hoc 签名的 `.app`；Developer ID 签名、公证、DMG 打包、自动更新、Intel 构建和其他操作系统仍属于后续发行工作。
+Desktop 发行目标是 macOS 13.5 或更高版本的 Apple Silicon。本地构建产出未签名但具备发行结构的 `.app`；发行打包器会校验干净的 annotated tag，应用 Developer ID 签名和 hardened runtime entitlement，对应用与 DMG 进行公证和 staple，挂载 DMG 完成最终验证，并生成校验和与发行清单。在这些签名检查通过前，任何产物都不是公开发行版。当前不支持自动更新、Intel 构建和其他操作系统。
 
 ```sh
 pnpm install
 pnpm run desktop:build
 ```
 
-应用产物位于 `apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness.app`。运行时、数据、安全性和生命周期行为见 Desktop 指南（[English](apps/desktop/README.md) | [中文](apps/desktop/README.zh.md)）。
+应用产物位于 `apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness Desktop.app`。运行时、数据、安全性、生命周期和发行行为见 Desktop 指南（[English](apps/desktop/README.md) | [中文](apps/desktop/README.zh.md)）。
 
 ## 上游项目
 

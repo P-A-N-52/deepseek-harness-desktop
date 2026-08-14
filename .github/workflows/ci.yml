@@ -322,7 +322,7 @@ jobs:
     name: python runtime / release-shaped Linux x64
     uses: ./.github/workflows/build-exe-for-python-sdk.yml
     with:
-      targets: node24-linux-x64
+      targets: node24.19.0-linux-x64
       ci: true
 
   # The required pull-request Windows signal: the two blocking win32 surfaces

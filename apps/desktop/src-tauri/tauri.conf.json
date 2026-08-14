@@ -1,8 +1,8 @@
 {
   "$schema": "../../../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "DeepSeek Harness",
-  "version": "0.1.0-rc.5",
-  "identifier": "ai.deepseek.harness",
+  "productName": "DeepSeek Harness Desktop",
+  "version": "0.1.0",
+  "identifier": "io.github.pan52.deepseek-harness-desktop",
   "build": {
     "frontendDist": "../ui"
   },
@@ -18,7 +18,12 @@
     "active": true,
     "targets": ["app"],
     "category": "DeveloperTool",
-    "shortDescription": "DeepSeek Harness native desktop shell",
+    "shortDescription": "Community macOS distribution of DeepSeek Harness",
+    "copyright": "Copyright © 2026 DeepSeek Harness contributors",
+    "macOS": {
+      "bundleVersion": "0.1.705",
+      "minimumSystemVersion": "13.5"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

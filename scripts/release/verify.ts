@@ -8,6 +8,7 @@
  */
 
 import { parseArgs } from 'node:util'
+import { verifyDesktopVersion } from '../desktop-version.ts'
 import { isEntry } from './process.ts'
 import { releaseFamily, type ReleaseFamily, type ReleaseMember } from './families.ts'
 
@@ -55,6 +56,7 @@ function main(): void {
   const family = releaseFamily(values.family)
   const members = family.members(process.cwd())
   family.verifyVersions(members)
+  if (family.id === 'dsh') verifyDesktopVersion(process.cwd(), members[0]?.version ?? '')
 
   const publishing = process.env.RELEASE_PUBLISH === 'true'
   if (publishing) {

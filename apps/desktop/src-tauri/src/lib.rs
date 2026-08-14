@@ -88,10 +88,7 @@ impl DesktopState {
     }
 
     fn install_runtime(&self, runtime: RuntimeProcess) -> Result<(), RuntimeProcess> {
-        let mut current = self
-            .runtime
-            .lock()
-            .expect("desktop runtime lock poisoned");
+        let mut current = self.runtime.lock().expect("desktop runtime lock poisoned");
         if self.lifecycle.load(Ordering::Acquire) != RUNNING {
             return Err(runtime);
         }
@@ -125,7 +122,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let policy = NavigationPolicy::default();
     let navigation_policy = policy.clone();
     let window = WebviewWindowBuilder::new(app, MAIN_WINDOW, WebviewUrl::App("index.html".into()))
-        .title("DeepSeek Harness")
+        .title("DeepSeek Harness Desktop")
         .inner_size(1180.0, 780.0)
         .min_inner_size(780.0, 560.0)
         .center()
@@ -225,20 +222,7 @@ fn runtime_launch(app: &tauri::App) -> Result<RuntimeLaunch, String> {
             .map_err(|error| error.to_string())?;
         Ok(RuntimeLaunch {
             program: OsString::from("node"),
-            args: vec![
-                OsString::from("--import"),
-                repository
-                    .join("node_modules/tsx/dist/esm/index.mjs")
-                    .into_os_string(),
-                repository
-                    .join("apps/cli/src/bin.ts")
-                    .into_os_string(),
-                OsString::from("web"),
-                OsString::from("--host"),
-                OsString::from("127.0.0.1"),
-                OsString::from("--port"),
-                OsString::from("0"),
-            ],
+            args: debug_runtime_args(&repository),
             cwd,
             env: vec![(
                 OsString::from("DSH_DESKTOP_OWN_PROCESS_GROUP"),
@@ -281,6 +265,26 @@ fn runtime_launch(app: &tauri::App) -> Result<RuntimeLaunch, String> {
     }
 }
 
+#[cfg(debug_assertions)]
+fn debug_runtime_args(repository: &Path) -> Vec<OsString> {
+    vec![
+        OsString::from("--import"),
+        repository
+            .join("node_modules/tsx/dist/esm/index.mjs")
+            .into_os_string(),
+        repository.join("apps/cli/src/bin.ts").into_os_string(),
+        OsString::from("web"),
+        OsString::from("--patch"),
+        repository
+            .join("apps/cli/config/desktop.cordis.yml")
+            .into_os_string(),
+        OsString::from("--host"),
+        OsString::from("127.0.0.1"),
+        OsString::from("--port"),
+        OsString::from("0"),
+    ]
+}
+
 #[cfg(not(debug_assertions))]
 fn require_executable(path: &Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
@@ -317,5 +321,15 @@ mod tests {
         assert!(!policy.allows(&Url::parse("https://127.0.0.1:43127/").unwrap()));
         policy.clear_runtime();
         assert!(!policy.allows(&ready));
+    }
+
+    #[test]
+    fn debug_runtime_pins_the_desktop_composition() {
+        let repository = Path::new("/repository");
+        let args = debug_runtime_args(repository);
+        let overlay = repository.join("apps/cli/config/desktop.cordis.yml");
+        assert!(args.windows(2).any(|pair| {
+            pair[0] == OsString::from("--patch") && pair[1] == overlay.as_os_str()
+        }));
     }
 }

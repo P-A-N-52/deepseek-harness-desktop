@@ -19,6 +19,9 @@
       "path": "../../../vendor/include"
     },
     {
+      "path": "../../boot/app-boot"
+    },
+    {
       "path": "../../core/agent"
     },
     {

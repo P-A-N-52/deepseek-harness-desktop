@@ -5,6 +5,49 @@ import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
 const runnerPrivatePnpmDestination = '${{ runner.temp }}/setup-pnpm'
+const desktopWorkflowPaths = [
+  '.github/workflows/desktop-*.yml',
+  'apps/cli/**',
+  'apps/desktop/**',
+  'native/desktop-runtime/**',
+  'package.json',
+  'packages/**',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
+  'patches/**',
+  'scripts/*desktop*.ts',
+  'scripts/gen-third-party-notices.ts',
+  'scripts/single-exe-build*.ts',
+  'scripts/verify-runtime-closure.ts',
+]
+
+describe('Desktop CI workflow', () => {
+  it('pins the supported pnpm 11 setup and triggers its full offline deploy surface', () => {
+    const workflow = loadWorkflow('.github/workflows/desktop-ci.yml')
+    const pullRequest = workflowEvent(workflow, 'pull_request')
+    const push = workflowEvent(workflow, 'push')
+    const desktop = workflowJob(workflow, 'desktop-arm64')
+    if (!Array.isArray(pullRequest.paths) || !Array.isArray(push.paths) || !Array.isArray(desktop.steps)) {
+      throw new TypeError('Desktop CI must define PR/push paths and desktop-arm64 steps')
+    }
+
+    expect(pullRequest.paths).toEqual(desktopWorkflowPaths)
+    expect(push.paths).toEqual(desktopWorkflowPaths)
+    const pnpm = desktop.steps.filter(isRecord).find(step => step.uses === 'pnpm/action-setup@v6')
+    expect(pnpm).toMatchObject({
+      with: {
+        dest: runnerPrivatePnpmDestination,
+        version: '11.7.0',
+      },
+    })
+    const releaseEvidence = desktop.steps.filter(isRecord)
+      .find(step => step.name === 'Verify generated release evidence')
+    const lifecycle = desktop.steps.filter(isRecord)
+      .find(step => step.name === 'Exercise packaged app ownership and restart')
+    expect(releaseEvidence?.run).toMatch(/^pnpm run desktop:prepare-release --target /u)
+    expect(lifecycle?.run).toMatch(/^pnpm run desktop:verify-app --app /u)
+  })
+})
 
 describe('CI workflow', () => {
   it('isolates every pnpm action setup destination per runner', () => {
@@ -193,7 +236,7 @@ describe('CI workflow', () => {
       name: 'python runtime / release-shaped Linux x64',
       uses: './.github/workflows/build-exe-for-python-sdk.yml',
       with: {
-        targets: 'node24-linux-x64',
+        targets: 'node24.19.0-linux-x64',
         ci: true,
       },
     })
@@ -260,7 +303,7 @@ describe('Python release workflows', () => {
       if: "github.event_name == 'workflow_dispatch' || github.event.label.name == 'python-release-dry-run'",
       uses: './.github/workflows/build-exe-for-python-sdk.yml',
       with: {
-        targets: 'node24-linux-x64,node24-linux-arm64,node24-macos-arm64',
+        targets: 'node24.19.0-linux-x64,node24.19.0-linux-arm64,node24.19.0-macos-arm64',
         release: true,
       },
     })

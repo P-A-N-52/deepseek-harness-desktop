@@ -170,7 +170,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-agent-presets`
 
-需要：`loader`
+需要：`loader` · `appModuleResolver`
 
 ```ts config-catalog
 /** Plugin config: which preset is the default, and where presets live. */

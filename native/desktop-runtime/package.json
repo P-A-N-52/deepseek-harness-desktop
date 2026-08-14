@@ -4,6 +4,7 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "files": [],
   "dependencies": {
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/cordis-plugin-group": "workspace:^",

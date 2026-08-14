@@ -18,6 +18,7 @@ import AgentPresets, {
 import type { Config } from '@deepseek-ai/dsh-agent-presets'
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
 import { bindScopeParent, createScope, scopeOf } from '@deepseek-ai/dsh-scope'
+import { installTestAppModuleResolver } from './app-module-resolver.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -40,7 +41,7 @@ const ROOTS = [
  */
 async function harness(roster: Config = { default: 'standard', roots: ROOTS, includeUserRoot: false }): Promise<Context> {
   const ctx = new Context()
-  ctx.baseUrl = pathToFileURL(FIXTURES).href + '/'
+  installTestAppModuleResolver(ctx, pathToFileURL(FIXTURES).href + '/')
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   await ctx.plugin(LlmRuntime)
@@ -85,6 +86,43 @@ beforeEach(async () => {
 })
 
 describe('composing an agent from a preset', () => {
+  it('resolves bare rows from the application package tree outside the profile', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-preset-app-modules-'))
+    const profileRoot = join(root, 'profile')
+    const appRoot = join(root, 'application')
+    const presetDir = join(profileRoot, 'presets', 'sealed')
+    const packageName = '@fixture/sealed-preset-plugin'
+    const packageSegments = packageName.split('/')
+    const profilePackage = join(profileRoot, 'node_modules', ...packageSegments)
+    const appPackage = join(appRoot, 'node_modules', ...packageSegments)
+    await mkdir(profilePackage, { recursive: true })
+    await mkdir(appPackage, { recursive: true })
+    await mkdir(presetDir, { recursive: true })
+    const metadata = JSON.stringify({ name: packageName, type: 'module', exports: './index.mjs' })
+    await writeFile(join(profilePackage, 'package.json'), metadata)
+    await writeFile(join(profilePackage, 'index.mjs'), 'throw new Error("profile shadow imported")\n')
+    await writeFile(join(appPackage, 'package.json'), metadata)
+    await writeFile(join(appPackage, 'index.mjs'), 'export function apply() {}\n')
+    const presetPath = join(presetDir, COMPOSITION_FILE)
+    await writeFile(presetPath, `- id: sealed\n  name: '${packageName}'\n`)
+
+    const sealed = new Context()
+    const profileBaseUrl = pathToFileURL(join(profileRoot, 'cordis.yml')).href
+    const appBaseUrl = pathToFileURL(join(appRoot, 'entry.mjs')).href
+    installTestAppModuleResolver(sealed, profileBaseUrl, appBaseUrl)
+    await sealed.plugin(Loader)
+    sealed.loader.builtins.include = Include
+    const imported = vi.spyOn(sealed.loader.internal!, 'import')
+    const scope = createScope(sealed, { test: 'sealed-preset' })
+    try {
+      await mountPreset(scope.ctx, { id: 'sealed', path: presetPath, trust: 'system' })
+      expect(imported).toHaveBeenCalledWith(packageName, appBaseUrl, {})
+    } finally {
+      await sealed.fiber.dispose()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('hands an absolute plugin path to Node as a file URL', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-preset-absolute-plugin-'))
     const presetDir = join(root, 'absolute')
@@ -379,6 +417,7 @@ describe('composing from a broken preset', () => {
 describe('a roster with nothing in it', () => {
   it('says so instead of naming an empty list of candidates', async () => {
     const bare = new Context()
+    installTestAppModuleResolver(bare, pathToFileURL(FIXTURES).href + '/')
     await bare.plugin(Loader)
     await bare.plugin(AgentPresets, { default: 'standard', roots: [], includeUserRoot: false })
 
@@ -409,7 +448,7 @@ describe('the preset file is an input, never a persistence target', () => {
     await writeFile(path, composition)
 
     const scoped = new Context()
-    scoped.baseUrl = pathToFileURL(FIXTURES).href + '/'
+    installTestAppModuleResolver(scoped, pathToFileURL(FIXTURES).href + '/')
     await scoped.plugin(Loader)
     scoped.loader.builtins.include = Include
     await scoped.plugin(LlmRuntime)
@@ -464,6 +503,9 @@ describe('replacing a composition', () => {
     ctx.on('agent-preset/selected', (sessionId, agentPreset) => {
       selected.push([sessionId, agentPreset])
     })
+
+    agent.session.append('turn/end', { turn: 0, reason: { kind: 'completed' } })
+    expect(selected).toEqual([])
 
     agent.session.append('agent-preset/selected', { agentPreset: 'minimal' })
 
@@ -574,7 +616,7 @@ describe('replacing a composition', () => {
       await writeFile(join(root, id, COMPOSITION_FILE), body)
     }
     const scoped = new Context()
-    scoped.baseUrl = pathToFileURL(FIXTURES).href + '/'
+    installTestAppModuleResolver(scoped, pathToFileURL(FIXTURES).href + '/')
     await scoped.plugin(Loader)
     scoped.loader.builtins.include = Include
     await scoped.plugin(LlmRuntime)

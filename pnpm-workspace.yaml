@@ -52,8 +52,9 @@ allowBuilds:
   node-addon-require-builtin: false
   # JSONL durability calls MoveFileExW with write-through publication on Windows.
   koffi: true
-  # The Python runtime deploy includes the reviewed workspace postinstall that
-  # restores the executable bit on node-pty's macOS spawn helper.
+  # Workspace installs run the reviewed postinstall that restores the executable
+  # bit on node-pty's macOS spawn helper. SEA deploys verify and invoke that same
+  # staged script explicitly after pnpm rewrites workspace identities to file URLs.
   '@deepseek-ai/dsh-subprocess-local@file:packages/subprocess/subprocess-local': true
 
 minimumReleaseAgeExclude:
@@ -71,4 +72,5 @@ minimumReleaseAgeExclude:
   - node-addon-require-builtin@0.1.4
 
 patchedDependencies:
+  '@yao-pkg/pkg@6.21.0': patches/@yao-pkg+pkg@6.21.0.patch
   node-pty@1.1.0: patches/node-pty@1.1.0.patch

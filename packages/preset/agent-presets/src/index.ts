@@ -29,6 +29,8 @@ import { bindScopeParent, createScope, scopeOf, type Scope, type ScopeKey, type 
 import type {} from '@deepseek-ai/dsh-agent'
 import { settingsNamespace, type SettingsScope, type default as SettingsService } from '@deepseek-ai/dsh-settings'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
+// Empty type import carries the appModuleResolver Context merge.
+import type {} from '@deepseek-ai/dsh-app-boot'
 import { discoverPresets, USER_PRESET_DIR } from './discovery.ts'
 import { copyComposition, deleteComposition, readComposition } from './authoring.ts'
 import { mountPreset, serviceForAgent, standingMountFor } from './mount.ts'
@@ -80,7 +82,7 @@ declare module '@deepseek-ai/cordis' {
  * and a preset deleted underneath a picker disappears from the next read.
  */
 export class AgentPresets extends Service {
-  static inject = ['loader']
+  static inject = ['loader', 'appModuleResolver']
 
   /** Runtime schema for the preset roster. */
   static Config = z.object({

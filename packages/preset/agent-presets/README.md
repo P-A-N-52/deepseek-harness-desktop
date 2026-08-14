@@ -8,7 +8,7 @@ The mechanism is two seams. Entry contexts chain to the context a subtree was pl
 
 ## Service: `AgentPresets` (ctx key: `agentPresets`)
 
-Discovery is unmemoized: `list()` and `resolve()` re-read the roots on every call, so a preset authored while the process runs is visible immediately and a deleted one disappears from the next read. Discovery also owns preset **health**: a directory whose composition is missing or unloadable (unparsable YAML — checked with the loader's own dialect, `!!js` included — or not a list of named plugin rows) is listed with a `broken` reason rather than skipped, because a skipped directory would still occupy its id on disk while every surface shows nothing to delete. A directory whose name is not a usable preset id (`[a-z0-9][a-z0-9-]*`) is skipped outright: no copy could ever claim it.
+Discovery is unmemoized: `list()` and `resolve()` re-read the roots on every call, so a preset authored while the process runs is visible immediately and a deleted one disappears from the next read. Root scans enumerate names and inspect each candidate path without requiring `Dirent` objects, which keeps shipped roots readable from sealed application filesystems. Discovery also owns preset **health**: a directory whose composition is missing or unloadable (unparsable YAML — checked with the loader's own dialect, `!!js` included — or not a list of named plugin rows) is listed with a `broken` reason rather than skipped, because a skipped directory would still occupy its id on disk while every surface shows nothing to delete. A directory whose name is not a usable preset id (`[a-z0-9][a-z0-9-]*`) is skipped outright: no copy could ever claim it.
 
 - `ctx.agentPresets.defaultId: string` The preset id mounted when a caller names none.
 - `ctx.agentPresets.list(): Promise<AgentPreset[]>` Every preset the configured roots currently supply, earlier root winning a duplicate id; broken presets included, each carrying its reason.
@@ -62,7 +62,7 @@ The copied tree is re-tightened to owner-only (`0o600` files keeping their owner
 
 ### How a preset's rows resolve
 
-A row's **package name** resolves from the host composition, not from the preset directory. The Loader normally resolves an entry against its own tree's `baseUrl`, which for a preset is wherever the composition file sits; a locally authored preset lives under the user's home, where Node's upward `node_modules` walk never reaches the harness, so every `@deepseek-ai/dsh-*` row would fail to import. The mount records the host base before plugging the subtree and sends bare specifiers there.
+A row's **package name** resolves from the package tree selected by app boot, not from the preset directory. The Loader normally resolves an entry against its own tree's `baseUrl`, which for a preset is wherever the composition file sits; a locally authored preset lives under the user's home, where Node's upward `node_modules` walk never reaches the harness, while a sealed preset lives in a snapshot whose parent context remains the physical profile. The mount sends bare specifiers to `ctx.appModuleResolver.moduleBaseUrl`: a source launch keeps its Loader mappings, and a sealed launch imports the executable closure. Package metadata consumers use the resolver's `resolve()` method, so code and metadata stay in the same application tree.
 
 A **relative** path still resolves from the preset's own directory, so a preset's own plugin files and skill directories travel with it.
 

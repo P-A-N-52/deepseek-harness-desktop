@@ -1,0 +1,9 @@
+# The sealed Desktop WebView owns directory selection inside the existing Web
+# surface. Its Host half exposes only the browse seam over the same-origin API.
+- id: directory-picker
+  disabled: true
+- insert:
+    - id: directory-picker-browse
+      name: '@deepseek-ai/dsh-host-directory-picker-browse'
+    - id: ui-directory-picker-browse
+      name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'

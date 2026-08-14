@@ -7,6 +7,7 @@
  */
 
 import { loadLayeredEnv } from '@deepseek-ai/dsh-app-boot'
+import { fileURLToPath } from 'node:url'
 import { createDesktopParentTermination, watchDesktopParent } from './desktop-parent-watch.ts'
 import { runProfile } from './profile-boot.ts'
 
@@ -14,11 +15,12 @@ import { runProfile } from './profile-boot.ts'
 
 const parentTermination = createDesktopParentTermination()
 watchDesktopParent(process.ppid, undefined, () => { parentTermination.parentLost() })
+const desktopComposition = fileURLToPath(new URL('../config/desktop.cordis.yml', import.meta.url))
 
 await runProfile({
   environment: loadLayeredEnv('dsh'),
   profile: 'web',
-  patchFiles: [],
+  patchFiles: [desktopComposition],
   args: ['--host', '127.0.0.1', '--port', '0'],
   bareModuleBaseUrl: import.meta.url,
   supervisorSignal: parentTermination.signal,

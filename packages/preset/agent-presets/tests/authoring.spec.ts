@@ -18,6 +18,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import AgentPresets, {
   COMPOSITION_FILE, copyComposition, METADATA_FILE,
 } from '@deepseek-ai/dsh-agent-presets'
+import { installTestAppModuleResolver } from './app-module-resolver.ts'
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 const VALID = '- id: tool-alpha\n  name: ../../plugins/contribute.js\n  config:\n    tool: alpha\n'
@@ -43,7 +44,7 @@ async function seedPreset(
 beforeEach(async () => {
   userRoot = await mkdtemp(join(tmpdir(), 'dsh-preset-authoring-'))
   ctx = new Context()
-  ctx.baseUrl = pathToFileURL(FIXTURES).href + '/'
+  installTestAppModuleResolver(ctx, pathToFileURL(FIXTURES).href + '/')
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   await ctx.plugin(AgentPresets, {
@@ -194,7 +195,7 @@ describe('a deployment with more than one user root', () => {
     const second = await mkdtemp(join(tmpdir(), 'dsh-preset-second-'))
     await seedPreset(second, 'elsewhere')
     const layered = new Context()
-    layered.baseUrl = pathToFileURL(FIXTURES).href + '/'
+    installTestAppModuleResolver(layered, pathToFileURL(FIXTURES).href + '/')
     await layered.plugin(Loader)
     layered.loader.builtins.include = Include
     await layered.plugin(AgentPresets, {
@@ -218,7 +219,7 @@ describe('a deployment with more than one user root', () => {
 describe('a deployment with no writable root', () => {
   it('says authoring is unavailable rather than guessing a directory', async () => {
     const readOnly = new Context()
-    readOnly.baseUrl = pathToFileURL(FIXTURES).href + '/'
+    installTestAppModuleResolver(readOnly, pathToFileURL(FIXTURES).href + '/')
     await readOnly.plugin(Loader)
     readOnly.loader.builtins.include = Include
     await readOnly.plugin(AgentPresets, {
@@ -237,7 +238,7 @@ describe('a user root that does not exist yet', () => {
   it('is created by the first copy', async () => {
     const absent = join(await mkdtemp(join(tmpdir(), 'dsh-preset-absent-')), 'nested', 'preset')
     const fresh = new Context()
-    fresh.baseUrl = pathToFileURL(FIXTURES).href + '/'
+    installTestAppModuleResolver(fresh, pathToFileURL(FIXTURES).href + '/')
     await fresh.plugin(Loader)
     fresh.loader.builtins.include = Include
     await fresh.plugin(AgentPresets, {

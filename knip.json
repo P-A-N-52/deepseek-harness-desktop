@@ -20,6 +20,7 @@
   ],
   "ignoreDependencies": [
     "@tauri-apps/cli",
+    "@yao-pkg/pkg",
     "@yarnpkg/cli-dist",
     "lightningcss"
   ],

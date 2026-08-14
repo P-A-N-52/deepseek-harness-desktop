@@ -514,6 +514,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Plain node:http carrier: named-route registry, index transform taps, and the static dist fallback; web-transport plugins register their own routes.',
   },
   {
+    key: 'appModuleResolver',
+    pkg: 'app-boot',
+    title: 'Application module resolution',
+    mode: 'core',
+    consumers: ['modules'],
+    note: 'App boot selects one package tree for bare imports and metadata resolution; the client module host consumes it so plugin code and package metadata come from the same installation.',
+  },
+  {
     key: 'clientModules',
     pkg: 'modules',
     title: 'Client plugin graph host',

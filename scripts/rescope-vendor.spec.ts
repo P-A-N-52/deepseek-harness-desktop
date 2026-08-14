@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { exactEditState } from './rescope-vendor.ts'
+import { exactEditState, rewritePackageNames } from './rescope-vendor.ts'
 
 const ANCHOR = '\n## Sync procedure'
 const INSERTED = `\n15. **rescope**: one log entry.\n${ANCHOR}`
@@ -37,5 +37,25 @@ describe('exactEditState', () => {
     // A moved or partially applied site: neither state is complete.
     expect(exactEditState('a = 1\nb = 2\n', 'a = 1', 'b = 2', 1)).toBe('invalid')
     expect(exactEditState('x\n', 'a = 1', 'b = 2', 1)).toBe('invalid')
+  })
+})
+
+describe('rewritePackageNames', () => {
+  it('rescopes package imports without changing Cordis event and locale identifiers', () => {
+    const source = [
+      "import type { Context } from 'cordis'",
+      "ctx.emit('cordis/request-run', request)",
+      "if (name.startsWith('cordis/')) refresh()",
+      "name: 'cordis',",
+      '',
+    ].join('\n')
+
+    expect(rewritePackageNames(source, 'packages/extensions/ui-cordis/src/client/index.ts').text).toBe([
+      "import type { Context } from '@deepseek-ai/cordis'",
+      "ctx.emit('cordis/request-run', request)",
+      "if (name.startsWith('cordis/')) refresh()",
+      "name: 'cordis',",
+      '',
+    ].join('\n'))
   })
 })

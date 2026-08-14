@@ -1,0 +1,120 @@
+name: Desktop macOS
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/desktop-*.yml'
+      - 'apps/cli/**'
+      - 'apps/desktop/**'
+      - 'native/desktop-runtime/**'
+      - 'package.json'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'patches/**'
+      - 'scripts/*desktop*.ts'
+      - 'scripts/gen-third-party-notices.ts'
+      - 'scripts/single-exe-build*.ts'
+      - 'scripts/verify-runtime-closure.ts'
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/desktop-*.yml'
+      - 'apps/cli/**'
+      - 'apps/desktop/**'
+      - 'native/desktop-runtime/**'
+      - 'package.json'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'patches/**'
+      - 'scripts/*desktop*.ts'
+      - 'scripts/gen-third-party-notices.ts'
+      - 'scripts/single-exe-build*.ts'
+      - 'scripts/verify-runtime-closure.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DSH_TELEMETRY_DISABLED: '1'
+  PRIMARY_NODE_VERSION: '24.19.0'
+
+jobs:
+  desktop-arm64:
+    name: Desktop / macOS 13.5+ / arm64
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Require Apple Silicon runner
+        run: test "$(uname -m)" = arm64
+
+      - uses: pnpm/action-setup@v6
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          version: 11.7.0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Install (immutable)
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Desktop release-surface unit tests
+        run: >-
+          pnpm exec vitest run
+          scripts/desktop-version.spec.ts
+          scripts/package-desktop-release.spec.ts
+          scripts/prepare-desktop-release.spec.ts
+          scripts/single-exe-build.spec.ts
+          scripts/verify-desktop-app-lifecycle.spec.ts
+          scripts/verify-desktop-bundle.spec.ts
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install chromium
+
+      - name: Build sealed Desktop application
+        run: pnpm run desktop:build
+
+      - name: Smoke final SEA sidecar
+        env:
+          DSH_DESKTOP_RUNTIME_BIN: ${{ github.workspace }}/apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness Desktop.app/Contents/MacOS/dsh-desktop-runtime
+          DSH_REQUIRE_DESKTOP_RUNTIME_SMOKE: '1'
+        run: pnpm exec vitest run apps/cli/tests/packaged-desktop-startup.compat.spec.ts
+
+      - name: Exercise final SEA through Chromium
+        env:
+          DSH_DESKTOP_RUNTIME_BIN: ${{ github.workspace }}/apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness Desktop.app/Contents/MacOS/dsh-desktop-runtime
+          DSH_REQUIRE_DESKTOP_RUNTIME_BROWSER_SMOKE: '1'
+        run: pnpm exec vitest run apps/cli/tests/packaged-desktop-browser.compat.spec.ts
+
+      - name: Verify generated release evidence
+        run: >-
+          pnpm run desktop:prepare-release
+          --target aarch64-apple-darwin
+          --app-binary apps/desktop/src-tauri/target/release/dsh-desktop
+          --check
+          --release
+
+      - name: Verify unsigned release-shaped Desktop bundle
+        run: >-
+          pnpm exec tsx scripts/verify-desktop-bundle.ts
+          --app "${GITHUB_WORKSPACE}/apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness Desktop.app"
+          --arch arm64
+          --minimum-macos 13.5
+          --mode build
+
+      - name: Exercise packaged app ownership and restart
+        run: >-
+          pnpm run desktop:verify-app
+          --app "${GITHUB_WORKSPACE}/apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness Desktop.app"

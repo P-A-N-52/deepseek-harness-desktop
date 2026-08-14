@@ -14,7 +14,9 @@ DeepSeek Harness 已有完整的浏览器 GUI、同源 API 载体和由 CLI 拥�
 
 该页面不获得 Tauri IPC、invoke handler、remote capability、shell、文件系统或进程能力。导航仅允许到已就绪的回环 origin。`$DSH_HOME` 仍是 sidecar 所解析的 Harness home，因此 profile、设置、凭据引用和会话与 `dsh` 共享。
 
-封闭入口把自身的可执行文件闭包选作应用模块树。App boot 既从该树导入裸 Cordis 插件，也通过它提供 `ctx.appModuleResolver`；client 模块注册表经该服务解析每个 `dsh.client` 包 manifest。被包含配置的上下文仍以 profile 为基准，因此物理 `$DSH_HOME` profile 无法替换或隐藏已从闭包导入代码的元数据。
+封闭入口把自身的可执行文件闭包选作应用模块树。App boot 既从该树导入裸 Cordis 插件，也通过它提供 `ctx.appModuleResolver`；client 模块注册表经该服务解析每个 `dsh.client` 包 manifest，agent preset 子树则以其 `moduleBaseUrl` 导入裸包行。被包含配置的上下文仍以 profile 为基准，因此物理 `$DSH_HOME` profile 无法替换或隐藏从闭包选定的代码或元数据。随附 agent preset 通过枚举快照目录名称并检查其路径来发现，不依赖封闭文件系统提供带原型的 `Dirent`。
+
+封闭入口固定使用浏览式目录选择器组合。目录列举和创建通过现有同源 Host API 传输，交互则留在 WebView 内。它既不向页面授予 Tauri 文件系统能力，也不把选择器窗口交给 `osascript` 子进程。普通 Web profile 保留自适应选择器，因为其宿主和浏览器可能有不同的部署需要。
 
 Desktop shell 不增加审批响应路径。在既有 API 协议实现 `ApiProxy.respond` 之前，待审批项继续保持现有 GUI 的仅展示行为。
 
@@ -24,7 +26,7 @@ Rust host 拥有一棵以专属进程组为根的 sidecar 进程树。它只会�
 
 ## 验证
 
-Desktop 检查覆盖 sidecar 命令构造、就绪 URL 准入、启动失败和关闭。首日发行验收使用已打包的 macOS GUI smoke：启动应用，经现有页面新建或恢复会话，发送一条 prompt，退出应用，通过信号和强制退出终止 host，并确认共享的 `$DSH_HOME` 状态仍在且没有 sidecar 树残留。浏览器的无密钥 replay 与真实模型运行仍是浏览器/API 覆盖，不能替代该原生 smoke。
+Desktop 检查覆盖 sidecar 命令构造、就绪 URL 准入、启动失败和关闭。最终 SEA 通过 Chromium 运行，以证明插件激活、onboarding 和应用内工作区选择器。已打包应用的生命周期检查会启动原生 host，识别其直接 sidecar 与回环 listener，终止 host，证明进程树和端口已经消失，并针对同一 `$DSH_HOME` 重启。Chromium 和 API 检查不声称覆盖原生 WebView 交互。
 
 ## 考虑过的替代方案
 

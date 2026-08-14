@@ -70,6 +70,23 @@ interface WebBootGraph {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — this section is byte-identical in both language sides of the page. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxappmoduleresolver--appmoduleresolver"></a>
+
+### `ctx.appModuleResolver` — `AppModuleResolver`
+
+Bare-module resolution owned by the application deployment.
+
+```ts cordis-catalog
+/**
+ * Resolve one bare module or package subpath from the selected package tree.
+ * @param specifier - bare module or package subpath to resolve.
+ * @returns the absolute resolved filename.
+ */
+resolve(specifier: string): string
+```
+
+Source: [`packages/boot/app-boot/src/index.ts:35`](../../packages/boot/app-boot/src/index.ts)
+
 <a id="ctxclientmodules--clientmoduleregistry"></a>
 
 ### `ctx.clientModules` — `ClientModuleRegistry`
@@ -114,5 +131,5 @@ onRebuilt(listener: (id: string, rev: string) => void): () => void
 onGraphChanged(listener: () => void): () => void
 ```
 
-Source: [`packages/client/modules/src/index.ts:184`](../../packages/client/modules/src/index.ts)
+Source: [`packages/client/modules/src/index.ts:185`](../../packages/client/modules/src/index.ts)
 <!-- END GENERATED cordis-surface -->

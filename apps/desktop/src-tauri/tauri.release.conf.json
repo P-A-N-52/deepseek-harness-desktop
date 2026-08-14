@@ -1,8 +1,15 @@
 {
+  "build": {
+    "beforeBundleCommand": {
+      "script": "node --import tsx/esm scripts/prepare-desktop-release.ts --target aarch64-apple-darwin --app-binary apps/desktop/src-tauri/target/release/dsh-desktop",
+      "cwd": "../../.."
+    }
+  },
   "bundle": {
     "externalBin": ["binaries/dsh-desktop-runtime"],
     "resources": {
-      "resources/runtime/**/*": "runtime/"
+      "resources/runtime/**/*": "runtime/",
+      "resources/legal/**/*": "legal/"
     }
   }
 }

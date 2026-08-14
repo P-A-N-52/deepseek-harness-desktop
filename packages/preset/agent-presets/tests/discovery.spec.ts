@@ -7,6 +7,7 @@ import { COMPOSITION_FILE, discoverPresets, scanRoot } from '@deepseek-ai/dsh-ag
 
 const fsHarness = vi.hoisted(() => ({
   nextReadError: undefined as NodeJS.ErrnoException | undefined,
+  nextDirectoryNames: undefined as string[] | undefined,
 }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -21,6 +22,14 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       }
       return (actual.readFile as (path: unknown, ...args: never[]) => Promise<unknown>)(path, ...rest)
     }) as typeof actual.readFile,
+    readdir: (async (path: unknown, ...rest: never[]) => {
+      const names = fsHarness.nextDirectoryNames
+      if (names !== undefined) {
+        fsHarness.nextDirectoryNames = undefined
+        return names
+      }
+      return (actual.readdir as (path: unknown, ...args: never[]) => Promise<unknown>)(path, ...rest)
+    }) as typeof actual.readdir,
   }
 })
 
@@ -30,6 +39,7 @@ const USER = { path: join(FIXTURES, 'user'), trust: 'user' as const }
 
 beforeEach(() => {
   fsHarness.nextReadError = undefined
+  fsHarness.nextDirectoryNames = undefined
 })
 
 describe('display order', () => {
@@ -80,6 +90,22 @@ describe('preset discovery', () => {
     })
   })
 
+  it('discovers a preset when the filesystem supplies directory names without Dirent objects', async () => {
+    fsHarness.nextDirectoryNames = ['minimal']
+
+    const found = await scanRoot(SYSTEM)
+
+    expect(found.map(preset => preset.id)).toEqual(['minimal'])
+  })
+
+  it('skips a preset directory that vanishes after enumeration', async () => {
+    fsHarness.nextDirectoryNames = ['vanished']
+
+    const found = await scanRoot(SYSTEM)
+
+    expect(found).toEqual([])
+  })
+
   it('reports a directory with no composition as a broken preset slot', async () => {
     const found = await scanRoot(USER)
 
@@ -124,9 +150,9 @@ describe('preset discovery', () => {
     expect(found).toEqual([])
   })
 
-  it('ignores a plain file sitting beside the preset directories', async () => {
+  it('ignores a plain file whose name is a valid preset id', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-presets-'))
-    await writeFile(join(root, 'stray.yml'), '- id: x\n')
+    await writeFile(join(root, 'stray'), '- id: x\n')
     await mkdir(join(root, 'real'))
     await writeFile(join(root, 'real', COMPOSITION_FILE), '[]\n')
 
