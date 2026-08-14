@@ -23,7 +23,9 @@ pnpm run desktop:build
 
 `pnpm run desktop:package-release` 接受已构建应用、输出目录、Developer ID Application identity、`notarytool` keychain profile、annotated `desktop-v<dsh-version>` tag、Apple Team ID 和最低 macOS 版本。该命令要求 tag 指向干净的 `HEAD`，以 hardened runtime 签署嵌套代码和应用，对应用执行公证与 staple，创建带 `/Applications` 链接的 DMG 并签名，对 DMG 执行公证与 staple，以只读方式挂载 DMG 完成最终代码签名和 Gatekeeper 验证，并写出 `SHA256SUMS` 与 `release-manifest.json`。
 
-无凭据 CI 会构建并运行未签名应用，但不会使用 Apple 凭据或发布发行资产。只有打包命令使用受保护凭据完整成功后，签名发行版才存在。发行理由记录在 [macOS Desktop 发行产物说明](../../.agents/notes/implemented/process/2026-08-14-macos-desktop-release-artifact.md)中。
+无凭据 CI 会构建并运行未签名应用，但不会使用 Apple 凭据或发布发行资产。只允许手动运行的 `Desktop release` workflow 是公开发行路径。它只接受受保护 `desktop-release` environment 中与 dsh 版本精确对应的 annotated `desktop-v<dsh-version>` tag，使用冻结的 pnpm 与 Cargo lockfile 构建，把 Apple 凭据导入临时 keychain，运行打包命令，重新检查生成的 hash 与 manifest，并且只发布 DMG、`SHA256SUMS` 和 `release-manifest.json`。
+
+受保护 environment 必须要求 reviewer，并且只允许 `desktop-v*` tag。它定义 `DESKTOP_RELEASE_ENABLED=true`、`DESKTOP_RELEASE_REPOSITORY`、`DESKTOP_APPLE_SIGNING_IDENTITY` 和 `DESKTOP_APPLE_TEAM_ID`；其中的 secret 提供 base64 编码的 Developer ID P12 及其密码，以及 base64 编码的 App Store Connect API key、key ID 和 issuer ID。仓库文件和普通 CI 不得持有这些凭据。只有 workflow 完成签名、在线公证、staple、挂载 DMG 后的 Gatekeeper 验证以及 GitHub Release 发布，签名发行版才存在。发行理由记录在 [macOS Desktop 发行产物说明](../../.agents/notes/implemented/process/2026-08-14-macos-desktop-release-artifact.md)中。
 
 ## 运行时与数据
 

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-14-macos-desktop-release-artifact.md
-2026-08-14-macos-desktop-release-artifact.md: f05fac3550a618c5712aa906e1bfb0d2045553fd
-2026-08-14-macos-desktop-release-artifact.zh.md: f444f0c2f1e53a7f688fd4aa73b03426eca5a9b3
+2026-08-14-macos-desktop-release-artifact.md: 04ce388489c82ee544a1768829679386027c3a1e
+2026-08-14-macos-desktop-release-artifact.zh.md: c0ba8703299bdefdd229c10db634526eb486d586

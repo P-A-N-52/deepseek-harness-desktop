@@ -16,11 +16,13 @@ Desktop 发行版面向 `aarch64-apple-darwin`，并把四个可执行文件中�
 
 根 dsh semver 是发行标识。Cargo 携带完全相同的 semver。Tauri 把数字核心用作 `CFBundleShortVersionString`，并把带编号的 alpha、beta、preview 和 release candidate 阶段映射到有序的数字 `CFBundleVersion` 范围。dsh 发行版本提升会一起更新并验证这三种表示。
 
-封闭 runtime 使用 Node.js 24.19.0 和 `@yao-pkg/pkg` 6.21.0。其 producer 把每个允许的目标固定到 Node 发行校验文件公布的 SHA-256，在打包前验证 archive，并向打过 patch 的 packer 提供只含这些已验证字节的全新构建专用 SEA cache。保留的 archive 按内容寻址，并在提供 Node 许可证前再次验证。Desktop runtime producer 会把目标原生的 ripgrep 与 PTY helper 复制为资源，并在 Cargo 验证 Tauri resource 配置前创建被忽略的 legal resource 目录。最终 host 就绪后，唯一的发行准备阶段会把产品许可证、第三方声明以及特定目标的 npm 与 Cargo CycloneDX SBOM 写入该目录，再生成包含源码状态、版本、各可执行文件大小、SHA-256 摘要、架构、部署目标和产品最低版本的发行清单。npm SBOM 会把每个已部署 package 实例映射到唯一的 pnpm importer 或 package-and-snapshot 记录，并携带 registry SHA-512 integrity；Cargo SBOM 跟随已锁定的目标图。Tauri 只会在这些证据就绪后组装应用。
+封闭 runtime 使用 Node.js 24.19.0 和 `@yao-pkg/pkg` 6.21.0。其 producer 把每个允许的目标固定到 Node 发行校验文件公布的 SHA-256，在打包前验证 archive，并向打过 patch 的 packer 提供只含这些已验证字节的全新构建专用 SEA cache。保留的 archive 按内容寻址，并在提供 Node 许可证前再次验证。Desktop runtime producer 会把目标原生的 ripgrep 与 PTY helper 复制为资源，并在 Cargo 验证 Tauri resource 配置前创建被忽略的 legal resource 目录。最终 host 就绪后，唯一的发行准备阶段会把产品许可证、第三方声明以及特定目标的 npm 与 Cargo CycloneDX SBOM 写入该目录，再生成包含源码状态、版本、各可执行文件大小、SHA-256 摘要、架构、部署目标和产品最低版本的发行清单。npm SBOM 会把每个已部署 package 实例映射到唯一的 pnpm importer 或 package-and-snapshot 记录，并携带 registry SHA-512 integrity；Cargo SBOM 跟随已锁定的目标图。仓库的 Tauri launcher 会让每次构建都经过使用 `--locked` 执行 Cargo 的 runner，CI 也会拒绝发生变化的 `Cargo.lock`。Tauri 只会在这些证据就绪后组装应用。
 
 签名发行从 annotated `desktop-v<dsh-version>` tag 所命名的干净 `HEAD` 开始。打包器会验证未签名应用的证据，在外层应用之前签署嵌套 Mach-O 文件与 code bundle，并且只向 Node sidecar 授予 `sidecar-entitlements.plist` 中记录的四项 hardened runtime entitlement。它对应用执行公证与 staple，创建并签署包含应用和 `/Applications` 链接的 DMG，对 DMG 执行公证与 staple，以只读方式挂载它，并针对已挂载应用重复代码签名、staple 和 Gatekeeper 检查。生成目录包含 DMG、`SHA256SUMS`，以及绑定 tag commit 和 Apple Team ID 的发行清单。
 
-无凭据 CI 会在没有已生成 legal resource 的状态下启动，在 Apple Silicon runner 上构建应用、检查生成证据、在 Chromium 中启动最终 SEA，并验证原生 host 的进程所有权与重启。它既不读取 Apple 签名凭据，也不发布资产。发行操作者通过受保护环境向打包命令提供 Developer ID identity 和 `notarytool` keychain profile。
+无凭据 CI 会在没有已生成 legal resource 的状态下启动，在 Apple Silicon runner 上构建应用、检查生成证据、在 Chromium 中启动最终 SEA，并验证原生 host 的进程所有权与重启。它既不读取 Apple 签名凭据，也不发布资产。
+
+公开发行只能通过精确 annotated Desktop tag 上的手动 GitHub Actions workflow 完成。`desktop-release` environment 持有发行仓库开关、必需 reviewer 与 tag 策略、Developer ID certificate、App Store Connect 公证 key、签名 identity 和 Team ID。workflow 要求 tag commit 可从受保护默认分支到达，并且会在发布前重新检查远端 tag object 没有变化。它会先重复具备发行结构的构建与验收检查，再把凭据导入临时 keychain，随后调用同一个打包器并验证 3 个输出资产。GitHub 先收到只包含 DMG、`SHA256SUMS` 和 `release-manifest.json` 的 draft；只有全部上传完成后，workflow 才会将其公开。重试只能复用 3 个下载资产与新输出逐字节一致的 draft。仅 push 或创建 tag 无法读取凭据或发布产物。
 
 ## 考虑过的替代方案
 

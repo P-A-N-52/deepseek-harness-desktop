@@ -13,6 +13,7 @@ on:
       - 'pnpm-workspace.yaml'
       - 'patches/**'
       - 'scripts/*desktop*.ts'
+      - 'scripts/cargo-locked'
       - 'scripts/gen-third-party-notices.ts'
       - 'scripts/single-exe-build*.ts'
       - 'scripts/verify-runtime-closure.ts'
@@ -29,6 +30,7 @@ on:
       - 'pnpm-workspace.yaml'
       - 'patches/**'
       - 'scripts/*desktop*.ts'
+      - 'scripts/cargo-locked'
       - 'scripts/gen-third-party-notices.ts'
       - 'scripts/single-exe-build*.ts'
       - 'scripts/verify-runtime-closure.ts'
@@ -76,6 +78,7 @@ jobs:
           scripts/desktop-version.spec.ts
           scripts/package-desktop-release.spec.ts
           scripts/prepare-desktop-release.spec.ts
+          scripts/run-desktop-tauri.spec.ts
           scripts/single-exe-build.spec.ts
           scripts/verify-desktop-app-lifecycle.spec.ts
           scripts/verify-desktop-bundle.spec.ts
@@ -85,6 +88,9 @@ jobs:
 
       - name: Build sealed Desktop application
         run: pnpm run desktop:build
+
+      - name: Require an unchanged Cargo lockfile
+        run: git diff --exit-code -- apps/desktop/src-tauri/Cargo.lock
 
       - name: Smoke final SEA sidecar
         env:

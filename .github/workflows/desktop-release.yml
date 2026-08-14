@@ -1,0 +1,284 @@
+name: Desktop release
+
+# A release is an explicit, reviewed operation from the exact annotated tag.
+# Ordinary pushes and tags never gain Apple credentials or publication rights.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-publication
+  cancel-in-progress: false
+
+env:
+  DSH_TELEMETRY_DISABLED: '1'
+  PRIMARY_NODE_VERSION: '24.19.0'
+  DESKTOP_APP: ${{ github.workspace }}/apps/desktop/src-tauri/target/release/bundle/macos/DeepSeek Harness Desktop.app
+  RELEASE_OUTPUT: ${{ github.workspace }}/dist/desktop-release
+
+jobs:
+  release:
+    name: Sign, notarize, and publish Apple Silicon DMG
+    runs-on: macos-15
+    timeout-minutes: 90
+    environment: desktop-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Authorize the immutable release
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_ENABLED: ${{ vars.DESKTOP_RELEASE_ENABLED }}
+          RELEASE_REPOSITORY: ${{ vars.DESKTOP_RELEASE_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          expected_tag="desktop-v$version"
+          [ "$RELEASE_ENABLED" = true ] || {
+            echo "::error::Set DESKTOP_RELEASE_ENABLED=true in the desktop-release environment."
+            exit 1
+          }
+          [ -n "$RELEASE_REPOSITORY" ] && [ "$GITHUB_REPOSITORY" = "$RELEASE_REPOSITORY" ] || {
+            echo "::error::This repository is not the configured Desktop publisher repository."
+            exit 1
+          }
+          [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" = "$expected_tag" ] || {
+            echo "::error::Run this workflow from annotated tag $expected_tag."
+            exit 1
+          }
+          [ "$(git cat-file -t "$GITHUB_REF_NAME")" = tag ] || {
+            echo "::error::$GITHUB_REF_NAME must be an annotated tag."
+            exit 1
+          }
+          [ "$(git rev-parse "$GITHUB_REF_NAME^{commit}")" = "$(git rev-parse HEAD)" ] || {
+            echo "::error::$GITHUB_REF_NAME does not name the checked-out commit."
+            exit 1
+          }
+          [ "$(git rev-parse HEAD)" = "$GITHUB_SHA" ] || {
+            echo "::error::The checkout does not match the workflow commit."
+            exit 1
+          }
+          default_ref="refs/remotes/origin/$DEFAULT_BRANCH"
+          git rev-parse --verify "$default_ref" >/dev/null
+          git merge-base --is-ancestor "$GITHUB_SHA" "$default_ref" || {
+            echo "::error::$GITHUB_REF_NAME is not reachable from the protected default branch."
+            exit 1
+          }
+          [ "$(uname -m)" = arm64 ] || {
+            echo "::error::Desktop releases require an Apple Silicon runner."
+            exit 1
+          }
+
+      - uses: pnpm/action-setup@v6
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          version: 11.7.0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Install (immutable)
+        run: pnpm install --frozen-lockfile
+
+      - name: Run release-surface tests
+        run: >-
+          pnpm exec vitest run
+          scripts/ci-workflow.spec.ts
+          scripts/desktop-version.spec.ts
+          scripts/package-desktop-release.spec.ts
+          scripts/prepare-desktop-release.spec.ts
+          scripts/run-desktop-tauri.spec.ts
+          scripts/single-exe-build.spec.ts
+          scripts/verify-desktop-app-lifecycle.spec.ts
+          scripts/verify-desktop-bundle.spec.ts
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install chromium
+
+      - name: Build sealed release candidate
+        run: pnpm run desktop:build
+
+      - name: Require an unchanged Cargo lockfile
+        run: git diff --exit-code -- apps/desktop/src-tauri/Cargo.lock
+
+      - name: Smoke final SEA sidecar
+        env:
+          DSH_DESKTOP_RUNTIME_BIN: ${{ env.DESKTOP_APP }}/Contents/MacOS/dsh-desktop-runtime
+          DSH_REQUIRE_DESKTOP_RUNTIME_SMOKE: '1'
+        run: pnpm exec vitest run apps/cli/tests/packaged-desktop-startup.compat.spec.ts
+
+      - name: Exercise final SEA through Chromium
+        env:
+          DSH_DESKTOP_RUNTIME_BIN: ${{ env.DESKTOP_APP }}/Contents/MacOS/dsh-desktop-runtime
+          DSH_REQUIRE_DESKTOP_RUNTIME_BROWSER_SMOKE: '1'
+        run: pnpm exec vitest run apps/cli/tests/packaged-desktop-browser.compat.spec.ts
+
+      - name: Exercise packaged app ownership and restart
+        run: pnpm run desktop:verify-app --app "$DESKTOP_APP"
+
+      - name: Import protected Apple credentials
+        env:
+          CERTIFICATE_P12_BASE64: ${{ secrets.DESKTOP_APPLE_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DESKTOP_APPLE_CERTIFICATE_PASSWORD }}
+          NOTARY_ISSUER_ID: ${{ secrets.DESKTOP_APPLE_NOTARY_ISSUER_ID }}
+          NOTARY_KEY_ID: ${{ secrets.DESKTOP_APPLE_NOTARY_KEY_ID }}
+          NOTARY_KEY_P8_BASE64: ${{ secrets.DESKTOP_APPLE_NOTARY_KEY_P8_BASE64 }}
+          SIGNING_IDENTITY: ${{ vars.DESKTOP_APPLE_SIGNING_IDENTITY }}
+          TEAM_ID: ${{ vars.DESKTOP_APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          for name in CERTIFICATE_P12_BASE64 CERTIFICATE_PASSWORD NOTARY_ISSUER_ID NOTARY_KEY_ID NOTARY_KEY_P8_BASE64 SIGNING_IDENTITY TEAM_ID; do
+            [ -n "${!name:-}" ] || {
+              echo "::error::The desktop-release environment is missing $name."
+              exit 1
+            }
+          done
+
+          secret_root="$RUNNER_TEMP/dsh-desktop-signing"
+          keychain="$secret_root/release.keychain-db"
+          certificate="$secret_root/developer-id.p12"
+          notary_key="$secret_root/AuthKey_$NOTARY_KEY_ID.p8"
+          notary_profile=dsh-desktop-release
+          mkdir -m 700 "$secret_root"
+
+          python3 - "$certificate" "$notary_key" <<'PY'
+          import base64
+          import os
+          import pathlib
+          import sys
+
+          for variable, destination in zip(
+              ('CERTIFICATE_P12_BASE64', 'NOTARY_KEY_P8_BASE64'),
+              sys.argv[1:],
+              strict=True,
+          ):
+              pathlib.Path(destination).write_bytes(base64.b64decode(os.environ[variable], validate=True))
+          PY
+          chmod 600 "$certificate" "$notary_key"
+
+          keychain_password="$(openssl rand -hex 32)"
+          security create-keychain -p "$keychain_password" "$keychain"
+          echo "DSH_RELEASE_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          security set-keychain-settings -lut 7200 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
+          security default-keychain -d user -s "$keychain"
+          security list-keychains -d user -s "$keychain"
+          security find-identity -v -p codesigning "$keychain" | grep -F -- "\"$SIGNING_IDENTITY\""
+          xcrun notarytool store-credentials "$notary_profile" \
+            --key "$notary_key" \
+            --key-id "$NOTARY_KEY_ID" \
+            --issuer "$NOTARY_ISSUER_ID" \
+            --keychain "$keychain"
+          echo "DSH_NOTARY_PROFILE=$notary_profile" >> "$GITHUB_ENV"
+
+      - name: Sign, notarize, staple, and verify the release
+        env:
+          SIGNING_IDENTITY: ${{ vars.DESKTOP_APPLE_SIGNING_IDENTITY }}
+          TEAM_ID: ${{ vars.DESKTOP_APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          rm -rf "$RELEASE_OUTPUT"
+          pnpm run desktop:package-release \
+            --app "$DESKTOP_APP" \
+            --output "$RELEASE_OUTPUT" \
+            --identity "$SIGNING_IDENTITY" \
+            --minimum-macos 13.5 \
+            --notary-profile "$DSH_NOTARY_PROFILE" \
+            --tag "$GITHUB_REF_NAME" \
+            --team-id "$TEAM_ID"
+
+      - name: Verify immutable release assets
+        run: |
+          set -euo pipefail
+          cd "$RELEASE_OUTPUT"
+          shasum -a 256 -c SHA256SUMS
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs'
+          import { basename } from 'node:path'
+
+          const manifest = JSON.parse(readFileSync('release-manifest.json', 'utf8'))
+          if (manifest.tag !== process.env.GITHUB_REF_NAME || manifest.commit !== process.env.GITHUB_SHA) {
+            throw new Error('release manifest is not bound to the workflow tag and commit')
+          }
+          if (!Array.isArray(manifest.assets) || manifest.assets.length !== 1) {
+            throw new Error('release manifest must describe exactly one DMG')
+          }
+          const file = manifest.assets[0]?.file
+          if (typeof file !== 'string' || basename(file) !== file || !file.endsWith('_aarch64.dmg')) {
+            throw new Error('release manifest contains an invalid Apple Silicon DMG name')
+          }
+          NODE
+
+      - name: Remove temporary Apple credentials
+        if: always()
+        run: |
+          if [ -n "${DSH_RELEASE_KEYCHAIN:-}" ] && [ -e "$DSH_RELEASE_KEYCHAIN" ]; then
+            security delete-keychain "$DSH_RELEASE_KEYCHAIN"
+          fi
+          rm -rf "$RUNNER_TEMP/dsh-desktop-signing"
+
+      - name: Publish the verified GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dmg_name="$(node -p "require('$RELEASE_OUTPUT/release-manifest.json').assets[0].file")"
+          remote_tag="$(git ls-remote --refs origin "refs/tags/$GITHUB_REF_NAME" | awk '{print $1}')"
+          [ -n "$remote_tag" ] && [ "$remote_tag" = "$(git rev-parse "$GITHUB_REF_NAME")" ] || {
+            echo "::error::The remote Desktop tag changed after this workflow checked it out."
+            exit 1
+          }
+          assets=("$dmg_name" SHA256SUMS release-manifest.json)
+          existing_release="$RUNNER_TEMP/dsh-desktop-existing-release.json"
+          if gh release view "$GITHUB_REF_NAME" --json isDraft,tagName,assets > "$existing_release" 2>/dev/null; then
+            EXPECTED_DMG="$dmg_name" node --input-type=module - "$existing_release" <<'NODE'
+            import { readFileSync } from 'node:fs'
+
+            const release = JSON.parse(readFileSync(process.argv[2], 'utf8'))
+            const expected = [process.env.EXPECTED_DMG, 'SHA256SUMS', 'release-manifest.json'].sort()
+            const actual = Array.isArray(release.assets)
+              ? release.assets.map(asset => asset?.name).sort()
+              : []
+            if (release.isDraft !== true || release.tagName !== process.env.GITHUB_REF_NAME) {
+              throw new Error('an existing Desktop release must be the draft for this exact tag')
+            }
+            if (actual.length !== expected.length || actual.some((name, index) => name !== expected[index])) {
+              throw new Error('the existing Desktop draft does not contain exactly the three release assets')
+            }
+          NODE
+            retry_root="$RUNNER_TEMP/dsh-desktop-existing-assets"
+            rm -rf "$retry_root"
+            mkdir "$retry_root"
+            gh release download "$GITHUB_REF_NAME" --dir "$retry_root"
+            for asset in "${assets[@]}"; do
+              cmp "$RELEASE_OUTPUT/$asset" "$retry_root/$asset"
+            done
+          else
+            release_args=(
+              "$GITHUB_REF_NAME"
+              --draft
+              --verify-tag
+              --title "DeepSeek Harness Desktop ${GITHUB_REF_NAME#desktop-v}"
+              --generate-notes
+            )
+            if [[ "${GITHUB_REF_NAME#desktop-v}" == *-* ]]; then
+              release_args+=(--prerelease)
+            fi
+            release_args+=(
+              "$RELEASE_OUTPUT/$dmg_name"
+              "$RELEASE_OUTPUT/SHA256SUMS"
+              "$RELEASE_OUTPUT/release-manifest.json"
+            )
+            gh release create "${release_args[@]}"
+          fi
+          gh release edit "$GITHUB_REF_NAME" --verify-tag --draft=false
