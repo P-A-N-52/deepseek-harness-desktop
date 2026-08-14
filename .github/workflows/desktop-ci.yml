@@ -58,7 +58,7 @@ jobs:
       - name: Require Apple Silicon runner
         run: test "$(uname -m)" = arm64
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v5
         with:
           dest: ${{ runner.temp }}/setup-pnpm
           version: 11.7.0
