@@ -1,6 +1,7 @@
 # Agent Note: CI failover runbook — hosted pools → in-house pool
 
 Status: implemented
+Archived: 2026-08-14
 
 English | [中文](2026-07-26-ci-failover-runbook.zh.md)
 

@@ -6,30 +6,30 @@ English | [中文](2026-07-30-web-browser-snapshot-ci-gate.zh.md)
 
 ## Problem
 
-The [keyless web browser e2e lane](2026-07-24-web-gui-browser-e2e-lane.md) runs only under the local `pnpm run test:web` command, and PR CI does not compare `apps/web/tests/snapshots/**/*.expected.md`. A PR that changes user-visible web output can therefore remain green when its expected outputs are not refreshed; when any later branch explicitly runs `DSH_SNAPSHOT=refresh`, it backfills the earlier change and produces a diff unrelated to that branch. Ordinary local runs already default to read-only replay, so the gap is mandatory enforcement at the PR level, not a ban on writes in refresh mode.
+The [keyless web browser e2e lane](2026-07-24-web-gui-browser-e2e-lane.md) compares committed browser expected outputs locally, but a pull request needs the same replay assertion before it can merge. Otherwise a behavior change can leave stale expected outputs for an unrelated later branch to discover.
 
 ## Decision
 
-For Linux PRs, the `node 24 / snapshots and artifacts` job must run the full web browser replay/compare suite. `scripts/run-gates.ts` registers `test:web:built` as a `ci-consumers` gate and explicitly injects `DSH_SNAPSHOT=replay`; CI never runs in `record` or `refresh` mode, so when the committed goldens disagree with the currently assembled application, the tests fail directly instead of silently rewriting them on the runner and then passing.
+The `linux` lane in [ci.yml](../../../../.github/workflows/ci.yml) runs the full web browser replay/compare suite on every primary CI event. `scripts/run-gates.ts` includes `test:web:built` in `ci-linux-primary` and explicitly supplies `DSH_SNAPSHOT=replay`; CI never uses `record` or `refresh`, so a golden mismatch fails rather than rewriting an expected output on the runner.
 
-The consumer job owns the [single Linux build](../process/2026-07-30-independent-ci-consumer-build.md), so `apps/web/dist` and the package `lib/` directories remain in its workspace for the browser suite. On hosted runners, CI installs Chromium and its system dependencies at the Playwright version in the lockfile. On the persistent failover VM, the image owns the Linux system packages and CI installs only Chromium, avoiding per-run `apt` mutation. The hosted default-branch Linux serial job runs the suite and produces the operating-system-and-lockfile-keyed browser cache; pull requests restore it without paying compression and upload on the required path, with an operating-system prefix fallback across lockfile changes. The self-hosted standby runs the same comparison without hosted cache actions.
+The Linux lane owns the repository build and then runs the browser suite against the current `apps/web/dist` and package `lib/` outputs. It installs the lockfile-selected Chromium with its hosted system dependencies before the gate. The browser checks remain POSIX-oriented; the native Windows lane does not duplicate Chromium provisioning.
 
-Local `pnpm run test:web` continues to build first and then run the full browser suite; `test:web:built` is the entry point for existing build artifacts. Developers explicitly run `DSH_SNAPSHOT=refresh pnpm run test:web` only after confirming that user-visible output changed intentionally, review every expected-output diff, and then verify again in replay mode that no files are written.
+Local `pnpm run test:web` continues to build before executing the suite, and `test:web:built` remains the entry point for existing build artifacts. Developers run `DSH_SNAPSHOT=refresh pnpm run test:web` only for an intentional user-visible change, review the resulting expected-output diff, and then replay it without writes.
 
-For pull requests, the gate runs only in the Linux consumer job: these scenarios target POSIX, and the other PR jobs do not provision Chromium. The hosted and self-hosted default-branch Linux serial aggregates also include the comparison, while the macOS and Windows serial jobs remain browser-free. A PR's `all checks passed` verdict already depends on the consumer job, so a browser compare failure blocks the merge without requiring a new branch-protection check name.
-
-An observed self-hosted consumer run measured `web-snapshot` at 112.15 seconds and the full consumer aggregate at 114.97 seconds. The gate scheduler starts it as soon as `built-package-invariants` succeeds and runs independent gates concurrently, so it needs neither a dedicated job timeout nor a manual YAML ordering rule.
+The required aggregate depends on the Linux lane, so a browser mismatch blocks the same stable `all checks passed` result as the rest of the primary inventory. The [GitHub-hosted CI note](../process/2026-08-14-independent-desktop-github-hosted-ci.md) records the current runner and aggregate topology.
 
 ## Alternatives considered
 
-**Continue requiring only local runs.** Rejected: execution depends on developer memory, which is precisely why stale goldens drift across PRs, and cannot guarantee that the PR introducing a behavior change carries its own expected-output diff.
+**Continue requiring only local runs.** Rejected because developer memory cannot ensure that the pull request introducing a behavior change also carries its expected-output update.
 
-**Run CI in `refresh` mode and then check the working tree.** Rejected: checking after writing turns the assertion mechanism into a generator; if the working-tree check is wired incorrectly, it can turn a regression into a passing expected-output update. Replay compares the existing goldens directly and has a smaller failure surface.
+**Run CI in `refresh` mode and check the working tree afterward.** Rejected because writing before asserting can turn a regression into a generated update; replay compares the committed golden directly.
 
-**Create a standalone browser job and rebuild the entire repository.** Rejected: it would duplicate dependency installation and the publishable build. The existing Linux consumer job already owns that build and is part of the unified required verdict.
+**Create a standalone browser job.** Rejected because it would duplicate the primary Linux job's immutable install and build for a suite that already belongs to that required lane.
 
-**Replace real Chromium with jsdom snapshots.** Rejected: jsdom does not cover the browser, HTTP/SSE carriage, or the composition of real client plugin bundles. It remains useful for fast lower-layer feedback, but cannot replace the assembled browser chain.
+**Replace Chromium with jsdom snapshots.** Rejected because jsdom does not exercise the assembled browser, HTTP/SSE carriage, or real client-plugin composition.
 
 ## Consequences
 
-Before merge, every PR proves that the current web assembly matches all committed browser expected outputs, turning a missed refresh from an “unrelated change in a later PR” into a failure in the PR that introduced it. The cost is Chromium provisioning and one serial pass through the browser scenarios in the consumer job; the consumer-owned build and browser cache avoid duplicate builds and downloads on reruns. The gate still makes no claim of cross-platform browser consistency, and if a Playwright/Chromium upgrade changes the ARIA format, the upgrade PR must explicitly refresh the expected outputs and review the churn.
+Every primary CI run proves that the assembled web application matches its committed browser expected outputs. The Linux lane pays for Chromium provisioning and the browser suite, while the rest of the job inventory remains browser-free.
+
+The gate does not claim cross-platform browser equivalence. A Playwright or Chromium upgrade that changes the ARIA format requires an explicit refresh and review of the expected-output churn.

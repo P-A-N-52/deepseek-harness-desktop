@@ -20,6 +20,7 @@ import AgentPresets from '@deepseek-ai/dsh-agent-presets'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
+import { installTestAppModuleResolver } from '../../../preset/agent-presets/tests/app-module-resolver.ts'
 import { startInProcessRun } from '../src/index.ts'
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
@@ -35,7 +36,7 @@ afterEach(async () => {
 async function setupPresetHost(): Promise<{ ctx: Context; adapter: MockAdapter; parent: Agent }> {
   const ctx = new Context()
   contexts.push(ctx)
-  ctx.baseUrl = pathToFileURL(FIXTURES).href + '/'
+  installTestAppModuleResolver(ctx, pathToFileURL(FIXTURES).href + '/')
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   await mountAgentLoopTestDependencies(ctx)

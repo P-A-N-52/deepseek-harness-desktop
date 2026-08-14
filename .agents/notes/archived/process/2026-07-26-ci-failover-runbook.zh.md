@@ -1,6 +1,7 @@
 # Agent Note: CI 故障切换手册 — 托管池 → 自有池
 
 Status: implemented
+Archived: 2026-08-14
 
 [English](2026-07-26-ci-failover-runbook.md) | 中文
 

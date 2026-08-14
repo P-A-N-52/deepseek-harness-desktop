@@ -48,6 +48,8 @@ jobs:
       ci: ${{ steps.matrix.outputs.ci }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - id: matrix
         run: echo "ci=$(node ./scripts/github-matrix.mjs ci)" >> "$GITHUB_OUTPUT"
@@ -61,10 +63,14 @@ jobs:
       matrix: ${{ fromJson(needs.matrix.outputs.ci) }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: package.json
+          dest: ${{ runner.temp }}/setup-pnpm
+          version: 11.7.0
 
       - uses: actions/setup-node@v4
         with:
@@ -112,10 +118,14 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: package.json
+          dest: ${{ runner.temp }}/setup-pnpm
+          version: 11.7.0
 
       - uses: actions/setup-node@v4
         with:

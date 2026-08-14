@@ -1,6 +1,7 @@
 # Agent Note: Wine 与原生 Windows 双通道拉取请求 CI
 
 Status: implemented
+Archived: 2026-08-14
 
 [English](2026-08-08-native-windows-pull-request-ci.md) | 中文
 

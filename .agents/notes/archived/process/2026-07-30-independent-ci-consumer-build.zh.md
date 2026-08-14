@@ -1,6 +1,7 @@
 # Agent Note: CI 消费方独立构建
 
 Status: implemented
+Archived: 2026-08-14
 
 [English](2026-07-30-independent-ci-consumer-build.md) | 中文
 

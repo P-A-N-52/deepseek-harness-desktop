@@ -1,6 +1,7 @@
 # Agent Note: 基于实证选用 GitHub 托管大型运行器
 
 Status: implemented
+Archived: 2026-08-14
 
 [English](2026-07-22-evidence-based-larger-hosted-runners.md) | 中文
 

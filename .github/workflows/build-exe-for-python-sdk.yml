@@ -67,6 +67,8 @@ jobs:
       repository-version: ${{ steps.version.outputs.repository-version }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Resolve repository version
         id: version
@@ -121,6 +123,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v6.3.0
         with:
@@ -153,8 +157,13 @@ jobs:
         include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          version: 11.7.0
 
       # setup-node's built-in pnpm store cache keys on platform AND arch, so
       # the Linux architectures sharing runner.os stay on separate caches.
@@ -203,7 +212,7 @@ jobs:
             --user "$(id -u):$(id -g)" \
             -v "$PWD:$PWD" \
             -v "$HOME/.cache/node-gyp:$HOME/.cache/node-gyp:ro" \
-            -v "$HOME/setup-pnpm:$HOME/setup-pnpm:ro" \
+            -v "$RUNNER_TEMP/setup-pnpm:$RUNNER_TEMP/setup-pnpm:ro" \
             -w "$addon_dir" \
             "$image" \
             bash -euxo pipefail -c \

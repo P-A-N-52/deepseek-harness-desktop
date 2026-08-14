@@ -6,30 +6,30 @@ Status: implemented
 
 ## 问题
 
-[无密钥 Web 浏览器 e2e 车道](2026-07-24-web-gui-browser-e2e-lane.md)只由本地 `pnpm run test:web` 运行，PR CI 不比较 `apps/web/tests/snapshots/**/*.expected.md`。因此，改变用户可见 Web 输出的 PR 可以在漏刷预期输出时保持绿色；后来任意分支显式运行 `DSH_SNAPSHOT=refresh`，都会替前序变更补账并产生与本分支无关的 diff。普通本地运行已经默认使用只读 replay，缺口是 PR 级的强制执行，而不是禁止 refresh 写入。
+[无密钥 Web 浏览器 e2e 车道](2026-07-24-web-gui-browser-e2e-lane.md)会在本地比较已提交的浏览器预期输出，但拉取请求需要在合并前进行同样的回放断言。否则，行为变更可能留下陈旧的预期输出，直到无关的后续分支才会发现。
 
 ## 决策
 
-Linux PR 的 `node 24 / snapshots and artifacts` 必须运行完整 Web 浏览器 replay/compare。`scripts/run-gates.ts` 把 `test:web:built` 作为 `ci-consumers` 的一个 gate，并显式注入 `DSH_SNAPSHOT=replay`；CI 永不以 `record` 或 `refresh` 模式运行，因此提交的 golden 与当前组装应用不一致时测试直接失败，不会在 runner 内静默改写后通过。
+[ci.yml](../../../../.github/workflows/ci.yml) 中的 `linux` 泳道会在每个主 CI 事件中运行完整 Web 浏览器 replay/compare 套件。`scripts/run-gates.ts` 将 `test:web:built` 纳入 `ci-linux-primary`，并明确提供 `DSH_SNAPSHOT=replay`；CI 从不使用 `record` 或 `refresh`，因此 golden 不匹配会失败，而不会在 runner 上改写预期输出。
 
-消费方 job 在[消费方独立构建](../process/2026-07-30-independent-ci-consumer-build.md)中负责唯一一次 Linux 构建，因此 `apps/web/dist` 和包的 `lib/` 目录会保留在其工作区中，供浏览器套件使用。在托管运行器上，CI 按锁文件中的 Playwright 版本安装 Chromium 及其系统依赖。在持久化故障切换 VM 上，镜像负责预装 Linux 系统软件包，CI 只安装 Chromium，避免每次运行都通过 `apt` 改动系统。托管的默认分支 Linux 串行 job 运行该套件，并生成以操作系统和锁文件为键的浏览器缓存；PR 恢复该缓存，使必需路径无需承担压缩和上传开销，并可在锁文件变化时按操作系统前缀回退。自托管热备运行相同的比较，但不执行托管缓存操作。
+Linux 泳道负责仓库构建，然后针对当前 `apps/web/dist` 和包 `lib/` 输出运行浏览器套件。它会在门禁前安装锁文件选定的 Chromium 及其托管系统依赖。浏览器检查仍面向 POSIX；原生 Windows 泳道不重复 Chromium 设置。
 
-本地 `pnpm run test:web` 仍先构建再运行完整的浏览器套件；`test:web:built` 是已有构建产物的执行入口。开发者只在确认用户可见输出有意变化后显式运行 `DSH_SNAPSHOT=refresh pnpm run test:web`，评审每一处预期输出 diff，再以 replay 模式复验不再写文件。
+本地 `pnpm run test:web` 仍会在执行套件前构建，`test:web:built` 仍是已有构建产物的入口。开发者只会针对有意的用户可见变更运行 `DSH_SNAPSHOT=refresh pnpm run test:web`，评审随之产生的预期输出 diff，再以无写入的 replay 复验。
 
-对 PR 而言，门禁仅在 Linux 消费方 job 中运行：这些场景面向 POSIX，其他 PR job 不安装 Chromium。托管和自托管的默认分支 Linux 串行聚合作业也包含该比较，而 macOS 和 Windows 串行 job 仍不使用浏览器。PR 的 `all checks passed` 已依赖消费方 job，因此浏览器比较失败会阻止合并，无需新增 branch-protection check 名称。
-
-一次自托管消费方运行中，`web-snapshot` 实测耗时 112.15 秒，完整消费方聚合实测耗时 114.97 秒。gate 调度器会在 `built-package-invariants` 成功后立即启动它，并发运行彼此独立的 gate，因此既不需要专用 job 超时，也不需要手动制定 YAML 顺序规则。
+必需聚合流程依赖 Linux 泳道，因此浏览器不匹配会与其余主清单一样阻断稳定的 `all checks passed` 结果。[GitHub 托管 CI Note](../process/2026-08-14-independent-desktop-github-hosted-ci.md)记录当前的 runner 和聚合拓扑。
 
 ## 曾考虑的替代方案
 
-**继续只要求本地运行。** 已否决：执行依赖开发者记忆，正是陈旧 golden 跨 PR 漂移的原因，不能保证产生行为变化的 PR 自己携带预期输出 diff。
+**继续只要求本地运行。** 已否决：开发者记忆无法确保引入行为变更的拉取请求同时携带预期输出更新。
 
-**让 CI 以 `refresh` 模式运行后检查工作树。** 已否决：写后比较把断言机制变成生成器，若工作树检查接入有误，就可能把回归变成能够通过的预期输出更新；replay 直接比较已有 golden，失败面更小。
+**让 CI 以 `refresh` 模式运行后检查工作树。** 已否决：先写后断言可能把回归变成生成出的更新；replay 直接比较已提交的 golden。
 
-**新建独立 browser job 并重新构建全仓。** 已否决：它会重复依赖安装和发布构建。现有 Linux 消费方 job 已负责该构建，并已被统一的 required verdict 聚合。
+**新建独立 browser job。** 已否决：它会重复主 Linux 作业的不可变安装和构建，而该套件本已属于这条必需泳道。
 
-**用 jsdom 快照代替真实 Chromium。** 已否决：jsdom 不覆盖浏览器、HTTP/SSE 承载及真实客户端插件包的组合；它仍可用于快速的下层反馈，但不能替代组装后的浏览器链路。
+**用 jsdom 快照代替 Chromium。** 已否决：jsdom 不覆盖组装后的浏览器、HTTP/SSE 承载或真实客户端插件组合。
 
 ## 后果
 
-每个 PR 都在合并前证明当前 Web 组装与所有已提交的浏览器预期输出一致，漏刷从“后续 PR 的无关变化”变成引入 PR 自己的失败。成本是消费方 job 需要安装 Chromium，并串行运行一轮浏览器场景；消费方独立构建与浏览器缓存避免重跑时重复构建和下载。门禁仍不声称跨平台浏览器一致性，Playwright/Chromium 升级若改变 ARIA 格式，升级 PR 必须显式 refresh 并评审 churn。
+每次主 CI 运行都会证明组装后的 Web 应用与其已提交的浏览器预期输出一致。Linux 泳道承担 Chromium 设置和浏览器套件的成本，其余作业清单保持无浏览器。
+
+该门禁不声称跨平台浏览器等价。Playwright 或 Chromium 升级若改变 ARIA 格式，就需要明确 refresh 并评审预期输出 churn。

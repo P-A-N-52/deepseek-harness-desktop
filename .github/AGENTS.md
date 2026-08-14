@@ -1,3 +1,5 @@
 # AGENTS.md — GitHub Actions
 
-Run jobs on Windows runners (`windows-*` labels) under native `pwsh`. The pull-request `windows` job is the deliberate exception: it runs Windows Node under Wine on hosted Linux and blocks `all checks passed`; `windows-native` runs automatically on `windows-2025` (or the self-hosted `[self-hosted, dsh-win-ci, windows]` pool under `DSH_CI_FAILOVER_WINDOWS=selfhosted`) but reports independently. The master `serial-windows` standby continuously validates the self-hosted failover target — see the [failover runbook](../.agents/notes/implemented/process/2026-07-26-ci-failover-runbook.md).
+Run the `windows` CI job on `windows-latest` under native `pwsh`. The five blocking lanes in `.github/workflows/ci.yml` — `linux`, `node-compat`, `python-sdk`, `python-runtime`, and `windows` — must remain in `all-checks-passed`; use GitHub-hosted runners only, with no Wine, self-hosted, or failover topology.
+
+Every `actions/checkout` step must set `persist-credentials: false`; `scripts/ci-workflow.spec.ts` scans every workflow for this policy.

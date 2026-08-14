@@ -1,6 +1,6 @@
 # Sandbox CI: the keyless real-kernel confinement proofs. This master-only
 # reference stays outside the pull-request verdict; rationale lives in
-# .agents/notes/implemented/process/2026-07-21-serial-cross-platform-ci-reference.md.
+# .agents/notes/implemented/process/2026-08-14-independent-desktop-github-hosted-ci.md.
 # A separate workflow from ci.yml because the axis is different — these jobs
 # fan out over OS×runner (kernel capabilities), not node versions. The Landlock
 # launcher is built from native/landlock-run on each Landlock leg and installed
@@ -57,8 +57,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          version: 11.7.0
 
       - uses: actions/setup-node@v6
         with:
