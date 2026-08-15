@@ -249,13 +249,25 @@ fn navigate_to_error(window: &WebviewWindow, policy: &NavigationPolicy) {
 }
 
 fn runtime_launch(app: &tauri::App) -> Result<RuntimeLaunch, String> {
+    #[cfg(not(debug_assertions))]
     let cwd = app.path().home_dir().map_err(|error| error.to_string())?;
+    #[cfg(all(debug_assertions, windows))]
+    let _ = app; // the Windows debug runtime roots at the repository instead of the home directory
     #[cfg(debug_assertions)]
     {
         let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../..")
             .canonicalize()
             .map_err(|error| error.to_string())?;
+        // Windows: the tsx ESM loader crashes with `ERR_UNSUPPORTED_ESM_URL_SCHEME`
+        // (protocol 'c:') when the resolved module specifier is a bare absolute
+        // path — which happens when the process runs outside the repository.
+        // Keep the debug runtime rooted at the repository on Windows; Unix keeps
+        // the home-directory working directory.
+        #[cfg(windows)]
+        let cwd = repository.clone();
+        #[cfg(not(windows))]
+        let cwd = app.path().home_dir().map_err(|error| error.to_string())?;
         Ok(RuntimeLaunch {
             program: OsString::from("node"),
             args: debug_runtime_args(&repository),
@@ -330,23 +342,47 @@ fn runtime_launch(app: &tauri::App) -> Result<RuntimeLaunch, String> {
 }
 
 #[cfg(debug_assertions)]
+#[cfg_attr(windows, allow(unused_variables))]
 fn debug_runtime_args(repository: &Path) -> Vec<OsString> {
-    vec![
-        OsString::from("--import"),
-        repository
-            .join("node_modules/tsx/dist/esm/index.mjs")
-            .into_os_string(),
-        repository.join("apps/cli/src/bin.ts").into_os_string(),
-        OsString::from("web"),
-        OsString::from("--patch"),
-        repository
-            .join("apps/cli/config/desktop.cordis.yml")
-            .into_os_string(),
-        OsString::from("--host"),
-        OsString::from("127.0.0.1"),
-        OsString::from("--port"),
-        OsString::from("0"),
-    ]
+    #[cfg(windows)]
+    {
+        // tsx's ESM loader on Windows crashes with ERR_UNSUPPORTED_ESM_URL_SCHEME
+        // (protocol 'c:') when the loader path is absolute, and `--import`
+        // resolves bare specifiers as package names — so the repository-relative
+        // forms must carry an explicit `./` prefix. The debug launch roots the
+        // runtime at the repository, which makes these paths resolve.
+        vec![
+            OsString::from("--import"),
+            OsString::from("./node_modules/tsx/dist/esm/index.mjs"),
+            OsString::from("./apps/cli/src/bin.ts"),
+            OsString::from("web"),
+            OsString::from("--patch"),
+            OsString::from("./apps/cli/config/desktop.cordis.yml"),
+            OsString::from("--host"),
+            OsString::from("127.0.0.1"),
+            OsString::from("--port"),
+            OsString::from("0"),
+        ]
+    }
+    #[cfg(not(windows))]
+    {
+        vec![
+            OsString::from("--import"),
+            repository
+                .join("node_modules/tsx/dist/esm/index.mjs")
+                .into_os_string(),
+            repository.join("apps/cli/src/bin.ts").into_os_string(),
+            OsString::from("web"),
+            OsString::from("--patch"),
+            repository
+                .join("apps/cli/config/desktop.cordis.yml")
+                .into_os_string(),
+            OsString::from("--host"),
+            OsString::from("127.0.0.1"),
+            OsString::from("--port"),
+            OsString::from("0"),
+        ]
+    }
 }
 
 #[cfg(all(not(debug_assertions), unix))]
@@ -402,7 +438,11 @@ mod tests {
     fn debug_runtime_pins_the_desktop_composition() {
         let repository = Path::new("/repository");
         let args = debug_runtime_args(repository);
-        let overlay = repository.join("apps/cli/config/desktop.cordis.yml");
+        let overlay = if cfg!(windows) {
+            Path::new("./apps/cli/config/desktop.cordis.yml").to_path_buf()
+        } else {
+            repository.join("apps/cli/config/desktop.cordis.yml")
+        };
         assert!(args.windows(2).any(|pair| {
             pair[0] == OsString::from("--patch") && pair[1] == overlay.as_os_str()
         }));
