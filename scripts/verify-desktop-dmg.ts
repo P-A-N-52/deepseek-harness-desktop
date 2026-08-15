@@ -1,7 +1,5 @@
 /** Verify one locally packaged unsigned Desktop disk image and its delivery metadata. */
 
-import { createReadStream } from 'node:fs'
-import { createHash } from 'node:crypto'
 import { lstat, mkdtemp, readFile, readdir, readlink, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -10,6 +8,7 @@ import type { DesktopDmgManifest } from './desktop-dmg.ts'
 import {
   parseDesktopDmgManifest,
   renderDesktopDmgChecksums,
+  sha256File,
 } from './desktop-dmg.ts'
 import { attempt, isEntry, run } from './release/process.ts'
 import { verifyDesktopBundle } from './verify-desktop-bundle.ts'
@@ -56,11 +55,11 @@ export async function verifyDesktopDmg(options: VerifyDesktopDmgOptions): Promis
   const dmg = join(input, asset.file)
   await assertRegularFile(dmg)
   const metadata = await stat(dmg)
-  const digest = await sha256(dmg)
+  const digest = await sha256File(dmg)
   if (metadata.size !== asset.bytes || digest !== asset.sha256) {
     throw new Error('release manifest disk image size or SHA-256 does not match the packaged asset')
   }
-  const manifestDigest = await sha256(manifestPath)
+  const manifestDigest = await sha256File(manifestPath)
   const expectedChecksums = renderDesktopDmgChecksums(asset, manifestDigest)
   const actualChecksums = await readFile(join(input, CHECKSUMS), 'utf8')
   if (actualChecksums !== expectedChecksums) {
@@ -125,16 +124,6 @@ async function assertDirectory(path: string): Promise<void> {
 async function assertRegularFile(path: string): Promise<void> {
   const metadata = await lstat(path)
   if (!metadata.isFile()) throw new Error(`expected regular file: ${path}`)
-}
-
-async function sha256(path: string): Promise<string> {
-  const hash = createHash('sha256')
-  for await (const rawChunk of createReadStream(path)) {
-    const chunk: unknown = rawChunk
-    if (!(chunk instanceof Uint8Array)) throw new Error(`Desktop DMG stream returned non-binary data for ${path}`)
-    hash.update(chunk)
-  }
-  return hash.digest('hex')
 }
 
 async function main(): Promise<void> {

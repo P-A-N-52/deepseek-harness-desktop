@@ -1,5 +1,8 @@
 /** Immutable metadata and user-facing text for the unsigned Desktop DMG. */
 
+import { createReadStream } from 'node:fs'
+import { createHash } from 'node:crypto'
+
 const TARGET = 'aarch64-apple-darwin'
 
 /** Facts recorded next to one locally packaged Desktop disk image. */
@@ -33,6 +36,22 @@ export interface DesktopDmgManifest {
     readonly automaticUpdates: false
   }
   readonly assets: readonly [{ readonly file: string; readonly bytes: number; readonly sha256: string }]
+}
+
+/**
+ * Calculate the SHA-256 digest of one Desktop distribution file.
+ *
+ * @param path - File whose complete binary contents must be hashed.
+ * @returns The lowercase hexadecimal digest.
+ */
+export async function sha256File(path: string): Promise<string> {
+  const hash = createHash('sha256')
+  for await (const rawChunk of createReadStream(path)) {
+    const chunk: unknown = rawChunk
+    if (!(chunk instanceof Uint8Array)) throw new Error(`Desktop distribution stream returned non-binary data for ${path}`)
+    hash.update(chunk)
+  }
+  return hash.digest('hex')
 }
 
 /**

@@ -1,7 +1,5 @@
 /** Package one immutable, ad-hoc sealed macOS Desktop developer-preview DMG. */
 
-import { createReadStream } from 'node:fs'
-import { createHash } from 'node:crypto'
 import {
   lstat,
   mkdir,
@@ -21,6 +19,7 @@ import {
   desktopUnsignedDmgName,
   desktopUnsignedTag,
   renderDesktopDmgChecksums,
+  sha256File,
 } from './desktop-dmg.ts'
 import { desktopVersion, verifyDesktopVersion } from './desktop-version.ts'
 import { prepareDesktopRelease } from './prepare-desktop-release.ts'
@@ -129,7 +128,7 @@ export async function packageDesktopDmg(options: PackageDesktopDmgOptions): Prom
     const asset = {
       file: dmgName,
       bytes: (await stat(dmg)).size,
-      sha256: await sha256(dmg),
+      sha256: await sha256File(dmg),
     }
     const manifest: DesktopDmgManifest = {
       schemaVersion: 2,
@@ -162,7 +161,7 @@ export async function packageDesktopDmg(options: PackageDesktopDmgOptions): Prom
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
     await writeFile(
       join(working, 'SHA256SUMS'),
-      renderDesktopDmgChecksums(asset, await sha256(manifestPath)),
+      renderDesktopDmgChecksums(asset, await sha256File(manifestPath)),
     )
 
     await verifyDesktopDmg({
@@ -261,16 +260,6 @@ async function assertAbsent(path: string): Promise<void> {
     throw error
   }
   throw new Error(`Desktop DMG output already exists: ${path}`)
-}
-
-async function sha256(path: string): Promise<string> {
-  const hash = createHash('sha256')
-  for await (const rawChunk of createReadStream(path)) {
-    const chunk: unknown = rawChunk
-    if (!(chunk instanceof Uint8Array)) throw new Error(`Desktop DMG stream returned non-binary data for ${path}`)
-    hash.update(chunk)
-  }
-  return hash.digest('hex')
 }
 
 function isMissing(error: unknown): error is NodeJS.ErrnoException {
